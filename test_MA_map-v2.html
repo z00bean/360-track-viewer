@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Massachusetts Map with Marker (Zoom and Pan Disabled)</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 600px; /* Set the height for the map */
+            width: 100%;   /* Full width for the map */
+        }
+
+        /* Custom blue dot for the marker */
+        .blue-dot {
+            background-color: rgb(55, 55, 138);
+            border-radius: 50%;
+            width: 8px;
+            height: 8px;
+            border: 1px solid rgb(55, 55, 138); /* Optional: to make it stand out */
+        }
+    </style>
+</head>
+<body>
+    <h1>Massachusetts Map with Tiny Blue Dot Marker</h1>
+    <!-- Div to hold the map -->
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        // Initialize the map with zoom and pan disabled
+        var map = L.map('map', {
+            center: [42.4072, -71.3824],  // Latitude and Longitude for Massachusetts
+            zoom: 8,                      // Zoom level
+            zoomControl: false,            // Disable zoom control buttons
+            scrollWheelZoom: false,        // Disable scroll wheel zoom
+            doubleClickZoom: false,        // Disable zoom on double click
+            dragging: false,               // Disable map panning
+            keyboard: false                // Disable keyboard controls (arrows, +/-)
+        });
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+
+        // Create a custom blue dot icon
+        var blueDotIcon = L.divIcon({
+            className: 'blue-dot',  // CSS class for the blue dot
+            iconSize: [4, 4],     // Size of the dot
+            popupAnchor: [0, -5]    // Adjusts where the popup appears relative to the marker
+        });
+
+        // Add the blue dot marker at a specified location (Example: Boston)
+        var marker = L.marker([42.3601, -71.0589], {icon: blueDotIcon}).addTo(map);
+
+        // Add a popup to the marker
+        marker.bindPopup("<b>Hello!</b><br>This is the specified location.").openPopup();
+    </script>
+</body>
+</html>

@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>360 Image Viewer and GPS Map</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    />
+    <style>
+      input[type="file"] {
+        display: none;
+      }
+
+      .custom-file-upload {
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        display: inline-block;
+        background: none;
+        color: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 0.5em;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        padding: 0 1em;
+      }
+
+      .custom-file-upload:hover {
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+
+      header {
+        /* border-bottom: 1px solid rgba(255, 255, 255, 0.1); */
+        margin: 3em 0;
+      }
+
+      body {
+        font-size: 16px;
+        background: #121212;
+        color: rgba(255, 255, 255, 0.8);
+        background: rgb(2, 0, 36);
+        background: linear-gradient(
+          0deg,
+          rgba(2, 0, 36, 1) 0%,
+          rgba(46, 46, 46, 1) 100%
+        );
+        height: 100vh;
+      }
+
+      #stepSize {
+        background: none;
+        border: 0;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 1.2em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 0.4em;
+      }
+
+      button {
+        border-radius: 0.5em;
+        border: none;
+        background: none;
+        color: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+      }
+
+      button:hover {
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      #viewer {
+        height: 400px;
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 0.5em 0.5em 0 0;
+      }
+      .map-container {
+        display: flex;
+        justify-content: space-between; /* Ensures map and map2 are on opposite sides */
+        margin-top: 60px;
+      }
+
+      .map-subcontainers {
+        width: 47.5%;
+      }
+
+      .footnote {
+        margin-bottom: 1em;
+        color: rgba(255, 255, 255, 0.3);
+      }
+
+      #map {
+        height: 400px;
+        margin-right: 10px; /* Space between map and map2 */
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 0.5em;
+      }
+
+      #map2 {
+        height: 400px;
+        /* Space between map and map2 */
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 0.5em;
+      }
+
+      #controls {
+        display: flex;
+        justify-content: center;
+        justify-content: space-between;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 2em;
+        border-radius: 0 0 0.5em 0.5em;
+        border-top: 0;
+      }
+
+      #controls button {
+        padding: 10px 20px;
+        margin: 0 10px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+      }
+
+      /* Custom blue dot for the marker */
+      .blue-dot {
+        background-color: rgb(34, 34, 250);
+        border-radius: 50%;
+        width: 8px;
+        height: 8px;
+        border: 1px solid rgb(180, 180, 209); /* Optional: to make it stand out */
+      }
+
+      #output {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>360 Image Viewer and GPS Map</h1>
+      </header>
+      <div id="viewer"></div>
+      <div id="controls">
+        <label for="fileInput" class="custom-file-upload"> Upload Data </label>
+        <input type="file" id="fileInput" multiple accept="image/*" />
+        <div>
+          <button id="prevButton">&lt;</button>
+          <button id="nextButton">&gt;</button>
+          &nbsp; &nbsp; &nbsp; &nbsp;
+          <button id="prevXButton">&lt;&lt;</button>
+          <input
+            style="text-align: center"
+            type="number"
+            id="stepSize"
+            value="5"
+            min="2"
+            max="20"
+            style="margin-left: 10px"
+          />
+          <button id="nextXButton">&gt;&gt;</button>
+        </div>
+      </div>
+      <!--<div id="map"></div>-->
+      <div class="map-container">
+        <div class="map-subcontainers">
+          <p class="footnote">TRACK MAP</p>
+          <div id="map"></div>
+        </div>
+        <div class="map-subcontainers">
+          <p class="footnote">SITE OF RECORDING</p>
+          <div id="map2"></div>
+        </div>
+      </div>
+
+      <ul id="output"></ul>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+      let currentIndex = 0;
+      let uniquePoints = [];
+      let markers = [];
+      let map;
+
+      // Define icons for normal and highlighted markers
+      const defaultIcon = L.icon({
+        iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
+        shadowUrl:
+          "https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      });
+
+      // Create a custom blue dot icon
+      var blueDotIcon = L.divIcon({
+        className: "blue-dot", // CSS class for the blue dot
+        iconSize: [4, 4], // Size of the dot
+        popupAnchor: [0, -5], // Adjusts where the popup appears relative to the marker
+      });
+
+      const maroonIcon = L.icon({
+        iconUrl: "current-location-pin.png", // Maroon color icon
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+        //iconUrl: 'https://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|800000' // Maroon pin color
+      });
+
+      function convertDMSToDD(degrees, minutes, seconds, direction) {
+        let dd = degrees + minutes / 60 + seconds / 3600;
+        if (direction === "S" || direction === "W") {
+          dd = dd * -1;
+        }
+        return dd;
+      }
+
+      function arePointsClose(lat1, lon1, lat2, lon2, threshold = 0.0001) {
+        return (
+          Math.abs(lat1 - lat2) < threshold && Math.abs(lon1 - lon2) < threshold
+        );
+      }
+
+      function showImage(index) {
+        const point = uniquePoints[index];
+        pannellum.viewer("viewer", {
+          type: "equirectangular",
+          panorama: point.imageSrc,
+          autoLoad: true,
+          yaw: 270,
+          pitch: -10,
+          hfov: 120, // Set to a higher value for the most zoomed-out view
+        });
+        highlightMarker(index);
+      }
+
+      function highlightMarker(index) {
+        markers.forEach((marker, i) => {
+          if (i === index) {
+            marker.setIcon(maroonIcon);
+          } else {
+            //marker.setIcon(defaultIcon);
+            marker.setIcon(blueDotIcon); //zubin
+          }
+        });
+      }
+
+      function showNextImage() {
+        // currentIndex = (currentIndex + 1) % uniquePoints.length;
+        // showImage(currentIndex);
+        currentIndex = currentIndex + 1;
+        if (currentIndex < uniquePoints.length) {
+          showImage(currentIndex);
+        } else {
+          currentIndex = uniquePoints.length - 1;
+          showImage(uniquePoints.length - 1); // Jump to the last image if out of bounds
+        }
+      }
+
+      function showPreviousImage() {
+        // currentIndex = (currentIndex - 1 + uniquePoints.length) % uniquePoints.length;
+        // showImage(currentIndex);
+        currentIndex = currentIndex - 1;
+        if (currentIndex >= 0) {
+          showImage(currentIndex);
+        } else {
+          currentIndex = 0;
+          showImage(0); // Jump to the first image if out of bounds
+        }
+      }
+
+      // Function to handle "Next X" button click
+      function showNextXImage() {
+        const stepSize =
+          parseInt(document.getElementById("stepSize").value) || 5;
+        currentIndex = currentIndex + stepSize;
+        if (currentIndex < uniquePoints.length) {
+          showImage(currentIndex);
+        } else {
+          currentIndex = uniquePoints.length - 1;
+          showImage(uniquePoints.length - 1); // Jump to the last image if out of bounds
+        }
+      }
+
+      // Function to handle "Previous X" button click
+      function showPreviousXImage() {
+        const stepSize =
+          parseInt(document.getElementById("stepSize").value) || 5;
+        currentIndex = currentIndex - stepSize;
+        if (currentIndex >= 0) {
+          showImage(currentIndex);
+        } else {
+          currentIndex = 0;
+          showImage(0); // Jump to the first image if out of bounds
+        }
+      }
+
+      document
+        .getElementById("nextButton")
+        .addEventListener("click", showNextImage);
+      document
+        .getElementById("prevButton")
+        .addEventListener("click", showPreviousImage);
+      document
+        .getElementById("nextXButton")
+        .addEventListener("click", showNextXImage);
+      document
+        .getElementById("prevXButton")
+        .addEventListener("click", showPreviousXImage);
+
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", function (event) {
+          const files = event.target.files;
+          const output = document.getElementById("output");
+          if (!map) {
+            // map = L.map('map').setView([0, 0], 2);
+            map = L.map("map").setView([0, 0], 2);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+              maxZoom: 18,
+            }).addTo(map);
+          }
+
+          // https://leafletjs.com/examples/quick-start/
+          // Right map
+          var midIdx = Math.floor(markers.length / 2);
+
+          // Add a marker at the middle point
+          //var marker2 = L.marker([markers[midIdx].lat, markers[midIdx].lon]).addTo(map2);
+          //var marker = L.marker([51.5, -0.09]).addTo(map);
+          var marker = L.marker([51.5, -0.09], { icon: blueDotIcon }).addTo(
+            map
+          ); //zubin
+
+          uniquePoints = [];
+          markers = [];
+
+          output.innerHTML = "";
+
+          let map2PointListUnsorted = [];
+
+          Array.from(files).forEach((file, index) => {
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+              const image = new Image();
+              image.src = e.target.result;
+
+              image.onload = function () {
+                EXIF.getData(image, function () {
+                  const lat = EXIF.getTag(this, "GPSLatitude");
+                  const lon = EXIF.getTag(this, "GPSLongitude");
+
+                  if (lat && lon) {
+                    const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
+                    const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || "W";
+                    const latitude = convertDMSToDD(
+                      lat[0],
+                      lat[1],
+                      lat[2],
+                      latRef
+                    );
+                    const longitude = convertDMSToDD(
+                      lon[0],
+                      lon[1],
+                      lon[2],
+                      lonRef
+                    );
+
+                    let isUnique = true;
+                    for (let point of uniquePoints) {
+                      if (
+                        arePointsClose(
+                          latitude,
+                          longitude,
+                          point.lat,
+                          point.lon
+                        )
+                      ) {
+                        isUnique = false;
+                        break;
+                      }
+                    }
+
+                    if (isUnique) {
+                      uniquePoints.push({
+                        lat: latitude,
+                        lon: longitude,
+                        imageSrc: e.target.result,
+                      });
+
+                      map2PointListUnsorted.push({
+                        latitude: latitude,
+                        longitude: longitude,
+                      });
+
+                      const marker = L.marker([latitude, longitude], {
+                        icon: blueDotIcon,
+                      })
+                        .addTo(map)
+                        .bindPopup(
+                          `${file.name}<br>Latitude: ${latitude}<br>Longitude: ${longitude}`
+                        );
+
+                      markers.push(marker);
+
+                      if (index === 0) {
+                        showImage(0); // Display the first image by default
+                      }
+
+                      const listItem = document.createElement("li");
+                      listItem.textContent = file.name;
+                      //output.appendChild(listItem); //Show selected image filenames
+                    }
+                  } else {
+                    console.log(`${file.name}: No GPS EXIF data found.`);
+                  }
+                });
+              };
+            };
+
+            reader.readAsDataURL(file);
+
+            reader.onloadend = function () {
+              if (markers.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds());
+                renderMap2();
+              }
+            };
+          });
+
+          var map2 = L.map("map2", {
+            center: [42.1072, -71.3824], // Latitude and Longitude for Massachusetts
+            zoom: 8, // Zoom level
+            zoomControl: false, // Disable zoom control buttons
+            scrollWheelZoom: false, // Disable scroll wheel zoom
+            doubleClickZoom: false, // Disable zoom on double click
+            dragging: false, // Disable map panning
+            keyboard: false, // Disable keyboard controls (arrows, +/-)
+          }); //).setView([0, 0], 15); //added : zubin
+
+          // Add tile layer to map2
+          L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution:
+              '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+          }).addTo(map2);
+
+          function renderMap2() {
+            let startingPoint =
+              map2PointListUnsorted[map2PointListUnsorted.length - 1];
+
+            function deg2rad(deg) {
+              return deg * (Math.PI / 180);
+            }
+
+            function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+              var RadiusOfEathInKM = 6371;
+              var dLat = deg2rad(lat2 - lat1);
+              var dLon = deg2rad(lon2 - lon1);
+              var a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(deg2rad(lat1)) *
+                  Math.cos(deg2rad(lat2)) *
+                  Math.sin(dLon / 2) *
+                  Math.sin(dLon / 2);
+              var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              var distanceInKM = RadiusOfEathInKM * c;
+              return distanceInKM;
+            }
+
+            for (let i = 0; i < map2PointListUnsorted.length; i++) {
+              let distance = getDistanceFromLatLonInKm(
+                parseInt(startingPoint.latitude),
+                parseInt(startingPoint.longitude),
+                map2PointListUnsorted[i].latitude,
+                map2PointListUnsorted[i].longitude
+              );
+              //Attaching returned distance from function to array elements
+              map2PointListUnsorted[i].distance = distance;
+            }
+            map2PointListUnsorted.sort(function (a, b) {
+              return a.distance - b.distance;
+            });
+
+            let map2PointListSorted = [];
+            map2PointListUnsorted.map((obj) => {
+              let tempArr = [];
+              tempArr.push(obj.latitude);
+              tempArr.push(obj.longitude);
+              map2PointListSorted.push(tempArr);
+            });
+
+            map2.panTo(
+              map2PointListSorted[parseInt(map2PointListSorted.length / 2)]
+            );
+
+            var polygon = L.polyline(map2PointListSorted, {
+              color: "maroon", // Maroon color in hexadecimal
+              weight: 5, // Thickness of the line
+              opacity: 1,
+            }).addTo(map2);
+          }
+        });
+    </script>
+  </body>
+</html>

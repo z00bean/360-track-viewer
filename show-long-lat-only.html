@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extract GPS EXIF Data</title>
+</head>
+<body>
+    <h1>Extract GPS EXIF Data from Images</h1>
+    <input type="file" id="fileInput" multiple accept="image/*">
+    <ul id="output"></ul>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const files = event.target.files;
+            const output = document.getElementById('output');
+            output.innerHTML = '';
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    const image = new Image();
+                    image.src = e.target.result;
+
+                    image.onload = function() {
+                        EXIF.getData(image, function() {
+                            const lat = EXIF.getTag(this, 'GPSLatitude');
+                            const lon = EXIF.getTag(this, 'GPSLongitude');
+
+                            if (lat && lon) {
+                                const latRef = EXIF.getTag(this, 'GPSLatitudeRef') || 'N';
+                                const lonRef = EXIF.getTag(this, 'GPSLongitudeRef') || 'W';
+                                const latitude = (lat[0] + lat[1] / 60 + lat[2] / 3600) * (latRef === 'N' ? 1 : -1);
+                                const longitude = (lon[0] + lon[1] / 60 + lon[2] / 3600) * (lonRef === 'E' ? 1 : -1);
+
+                                const listItem = document.createElement('li');
+                                listItem.textContent = `${file.name}: Latitude = ${latitude}, Longitude = ${longitude}`;
+                                output.appendChild(listItem);
+                            } else {
+                                const listItem = document.createElement('li');
+                                listItem.textContent = `${file.name}: No GPS EXIF data found.`;
+                                output.appendChild(listItem);
+                            }
+                        });
+                    };
+                };
+
+                reader.readAsDataURL(file);
+            });
+        });
+    </script>
+</body>
+</html>

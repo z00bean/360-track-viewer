@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360 Image Viewer and GPS Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <style>
+        #viewer {
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+        }
+        body {
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>360 Image Viewer and GPS Map</h1>
+    <input type="file" id="fileInput" multiple accept="image/*">
+    <div id="viewer"></div>
+    <div id="map"></div>
+    <ul id="output"></ul>
+
+    <script src="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        function convertDMSToDD(degrees, minutes, seconds, direction) {
+            let dd = degrees + minutes / 60 + seconds / 3600;
+            if (direction === "S" || direction === "W") {
+                dd = dd * -1;
+            }
+            return dd;
+        }
+
+        function arePointsClose(lat1, lon1, lat2, lon2, threshold = 0.0001) {
+            return Math.abs(lat1 - lat2) < threshold && Math.abs(lon1 - lon2) < threshold;
+        }
+
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const files = event.target.files;
+            const output = document.getElementById('output');
+            const map = L.map('map').setView([0, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+            }).addTo(map);
+            
+            let uniquePoints = [];
+            let markers = [];
+
+            output.innerHTML = '';
+
+            // Handle the first image to display in the viewer
+            const firstFile = files[0];
+            if (firstFile) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    pannellum.viewer('viewer', {
+                        type: 'equirectangular',
+                        panorama: e.target.result,
+                        autoLoad: true
+                    });
+                };
+                reader.readAsDataURL(firstFile);
+            }
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    const image = new Image();
+                    image.src = e.target.result;
+
+                    image.onload = function() {
+                        EXIF.getData(image, function() {
+                            const lat = EXIF.getTag(this, 'GPSLatitude');
+                            const lon = EXIF.getTag(this, 'GPSLongitude');
+
+                            if (lat && lon) {
+                                const latRef = EXIF.getTag(this, 'GPSLatitudeRef') || 'N';
+                                const lonRef = EXIF.getTag(this, 'GPSLongitudeRef') || 'W';
+                                const latitude = convertDMSToDD(lat[0], lat[1], lat[2], latRef);
+                                const longitude = convertDMSToDD(lon[0], lon[1], lon[2], lonRef);
+
+                                let isUnique = true;
+                                for (let point of uniquePoints) {
+                                    if (arePointsClose(latitude, longitude, point.lat, point.lon)) {
+                                        isUnique = false;
+                                        break;
+                                    }
+                                }
+
+                                if (isUnique) {
+                                    uniquePoints.push({ lat: latitude, lon: longitude });
+                                    const marker = L.marker([latitude, longitude]).addTo(map)
+                                        .bindPopup(`${file.name}<br>Latitude: ${latitude}<br>Longitude: ${longitude}`);
+                                    markers.push(marker);
+
+                                    const listItem = document.createElement('li');
+                                    listItem.textContent = file.name;
+                                    output.appendChild(listItem);
+                                }
+                            } else {
+                                console.log(`${file.name}: No GPS EXIF data found.`);
+                            }
+                        });
+                    };
+                };
+
+                reader.readAsDataURL(file);
+            });
+
+            reader.onloadend = function() {
+                if (markers.length > 0) {
+                    const group = new L.featureGroup(markers);
+                    map.fitBounds(group.getBounds());
+                }
+            };
+        });
+    </script>
+</body>
+</html>
