@@ -334,6 +334,17 @@
         }
       }
 
+      function showImageOnMarkerClick(lat, lon) {
+        let indexOfMarker = 0;
+        uniquePoints.map((point, index) => {
+          if (lat === point.lat && lon === point.lon) {
+            indexOfMarker = index;
+          }
+        });
+        currentIndex = indexOfMarker;
+        showImage(indexOfMarker);
+      }
+
       document
         .getElementById("nextButton")
         .addEventListener("click", showNextImage);
@@ -435,6 +446,12 @@
                             const marker = L.marker([latitude, longitude], {
                               icon: blueDotIcon,
                             })
+                              .on("click", (e) => {
+                                showImageOnMarkerClick(
+                                  e.latlng.lat,
+                                  e.latlng.lng
+                                );
+                              })
                               .addTo(map)
                               .bindPopup(
                                 `${file.name}<br>Latitude: ${latitude}<br>Longitude: ${longitude}`
