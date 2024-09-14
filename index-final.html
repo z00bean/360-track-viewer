@@ -143,6 +143,16 @@
         height: 8px;
         border: 1px solid rgb(180, 180, 209); /* Optional: to make it stand out */
       }
+
+      .pnlm-container {
+        background: none;
+      }
+
+      .test-block {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+      }
     </style>
   </head>
   <body>
@@ -150,7 +160,9 @@
       <header>
         <h1>360 Image Viewer and GPS Map</h1>
       </header>
-      <div id="viewer"></div>
+      <div id="viewer" class="test-block">
+        <p class="test-item footnote">No preview available</p>
+      </div>
       <div id="controls">
         <label for="fileInput" class="custom-file-upload"> Upload Data </label>
         <input type="file" id="fileInput" multiple accept="image/*" />
@@ -176,11 +188,15 @@
       <div class="map-container">
         <div class="map-subcontainers">
           <p class="footnote">TRACK MAP</p>
-          <div id="map"></div>
+          <div id="map" class="test-block">
+            <p class="test-item footnote">Map data unavailable</p>
+          </div>
         </div>
         <div class="map-subcontainers">
           <p class="footnote">SITE OF RECORDING</p>
-          <div id="map2"></div>
+          <div id="map2" class="test-block">
+            <p class="test-item footnote">Map data unavailable</p>
+          </div>
         </div>
       </div>
 
@@ -203,7 +219,6 @@
       let map2;
 
       let marker2;
-      let isMarker2Added = false;
 
       let startPointLat = -9999.0;
       let startPointLon = -9999.0;
@@ -347,9 +362,9 @@
           }
 
           var midIdx = Math.floor(markers.length / 2);
-          var marker = L.marker([51.5, -0.09], { icon: blueDotIcon }).addTo(
-            map
-          );
+          // let marker = L.marker([51.5, -0.09], { icon: blueDotIcon }).addTo(
+          //   map
+          // );
 
           uniquePoints = [];
           markers = [];
@@ -439,11 +454,11 @@
                 reader.readAsDataURL(file);
               });
             }
+
             if (markers.length > 0) {
               const group = new L.featureGroup(markers);
               map.fitBounds(group.getBounds());
             }
-            console.log(uniquePoints[0]);
 
             map2 = L.map("map2", {
               center: [uniquePoints[0].lat, uniquePoints[0].lon],
@@ -455,20 +470,16 @@
               keyboard: false,
             });
 
-            if (!isMarker2Added) {
-              marker2 = L.marker([uniquePoints[0].lat, uniquePoints[0].lon]);
-              marker2
-                .addTo(map2)
-                .bindPopup(`Location of recording.`)
-                .openPopup();
-              isMarker2Added = true;
-            }
+            marker2 = L.marker([uniquePoints[0].lat, uniquePoints[0].lon]);
+            marker2.addTo(map2).bindPopup(`Location of recording.`).openPopup();
 
             L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
               maxZoom: 19,
               attribution:
                 '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
             }).addTo(map2);
+
+            showImage(0);
           }
 
           const sortedFiles = sortFilesByNumber(files);
