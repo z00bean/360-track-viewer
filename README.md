@@ -53,11 +53,11 @@ The source code is hosted on GitHub. Clone the repository and explore the code t
 ```bash
 # Clone the repository
 git clone https://github.com/z00bean/360-track-viewer.git
-cd your-repo
+cd 360-track-viewer
 ```
 
 ## Contributions
 Feel free to contribute by reporting issues, suggesting improvements, or adding new features via pull requests.
 
 ---
-This project aims to enhance railway safety and accessibility studies through an interactive and immersive visualization tool.
+
