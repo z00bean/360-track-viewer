@@ -95,6 +95,6 @@ A **Python processing pipeline** has been developed to extract 360° frames and 
 
 **UMass Lowell | MassDOT Rail and Transit Division**
 
-**Principal Investigator:** [Dr. Yuanchang Xie](https://www.uml.edu/engineering/civil-environmental/faculty-staff-students/faculty/xie-yuanchang.aspx)
+**PI:** [Dr. Yuanchang Xie](https://www.uml.edu/engineering/civil-environmental/faculty-staff-students/faculty/xie-yuanchang.aspx)
 
 **Developed by:** [Dr. Zubin Bhuyan](https://zubinb.com/)
