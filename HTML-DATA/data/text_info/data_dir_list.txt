@@ -1,0 +1,11 @@
+data/text_info/VID_20240815_083847_00_014-GPS-frames-1_SEC-CSV.txt
+data/text_info/VID_20240815_090758_00_015-GPS-frames-1_SEC-CSV.txt
+data/text_info/VID_20240815_093710_00_016-GPS-frames-1_SEC-CSV.txt
+data/text_info/VID_20240815_100622_01_017-GPS-frames-1_SEC-CSV.txt
+data/text_info/VID_20240815_104510_00_018-GPS-frames-1_SEC-CSV.txt
+data/text_info/VID_20240815_111422_01_019-GPS-frames-1_SEC-CSV.txt
+data/text_info/VID_20240815_114334_01_020-GPS-frames-1_SEC-CSV.txt
+data/text_info/LRV_20240815_121245_01_021-GPS-frames-1_SEC-CSV.txt
+data/text_info/LRV_20240815_124848_11_022-GPS-frames-1_SEC-CSV.txt
+data/text_info/LRV_20240815_131802_11_023-GPS-frames-1_SEC-CSV.txt
+data/text_info/LRV_20240815_134716_11_024-GPS-frames-1_SEC-CSV.txt

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="author" content="Zubin Bhuyan, UMass Lowell" />
+    <meta name="robots" content="index, follow" />
+    <meta name="googlebot" content="index, follow" />
+    <meta
+        name="description"
+        content="Instructions for using the MassDOT Rail and Transit Division 360 image viewer and GPS trajectory map developed with UMass Lowell."
+    />
+    <title>Instructions - 360 Image Viewer and GPS Map</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #080b10;
+            --panel: #111820;
+            --line: rgba(255, 255, 255, 0.12);
+            --line-strong: rgba(255, 255, 255, 0.22);
+            --text: rgba(255, 255, 255, 0.9);
+            --muted: rgba(255, 255, 255, 0.62);
+            --cyan: #4fd1c5;
+            --blue: #4f83ff;
+            --amber: #f2a33a;
+            --radius: 8px;
+            --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font: 16px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background:
+                linear-gradient(180deg, rgba(79, 131, 255, 0.1), transparent 28rem),
+                linear-gradient(135deg, #080b10 0%, #101319 48%, #070a0f 100%);
+            color: var(--text);
+        }
+
+        main {
+            width: min(1100px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 28px 0 38px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        h1,
+        h2 {
+            margin: 0;
+            letter-spacing: 0;
+        }
+
+        h1 {
+            font-size: clamp(28px, 3vw, 42px);
+            line-height: 1.05;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        p {
+            margin: 0 0 12px;
+            color: var(--muted);
+        }
+
+        a {
+            color: var(--cyan);
+        }
+
+        .eyebrow {
+            margin: 0 0 8px;
+            color: var(--cyan);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .back-link {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 9px 14px;
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius);
+            background: rgba(79, 209, 197, 0.12);
+            color: var(--text);
+            font-weight: 700;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .back-link:hover,
+        .back-link:focus-visible {
+            border-color: rgba(79, 209, 197, 0.75);
+            background: rgba(79, 209, 197, 0.2);
+            outline: none;
+        }
+
+        .panel {
+            margin-top: 16px;
+            padding: 20px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: color-mix(in srgb, var(--panel) 92%, white 8%);
+            box-shadow: var(--shadow);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        ol,
+        ul {
+            margin: 0;
+            padding-left: 22px;
+            color: var(--muted);
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: var(--text);
+        }
+
+        .note {
+            border-left: 3px solid var(--amber);
+            padding-left: 12px;
+        }
+
+        .contact-card {
+            display: grid;
+            gap: 8px;
+        }
+
+        .contact-row {
+            display: grid;
+            grid-template-columns: 120px minmax(0, 1fr);
+            gap: 10px;
+            color: var(--muted);
+        }
+
+        .contact-row span:first-child {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        .site-footer {
+            margin-top: 18px;
+            padding: 14px 0 0;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .site-footer strong {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        .site-footer a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        @media (max-width: 760px) {
+            main {
+                width: min(100% - 18px, 680px);
+                padding-top: 16px;
+            }
+
+            header,
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            header {
+                align-items: flex-start;
+            }
+
+            .contact-row {
+                grid-template-columns: 1fr;
+                gap: 2px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <header>
+            <div>
+                <p class="eyebrow">MassDOT Rail and Transit Division</p>
+                <h1>Instructions</h1>
+            </div>
+
+            <a class="back-link" href="https://massdot360.cloud/">Back to viewer</a>
+        </header>
+
+        <section class="panel">
+            <h2>What This Website Does</h2>
+            <p>
+                This website displays 360-degree rail corridor imagery alongside a GPS trajectory map.
+                The viewer lets users step through recorded frames, play them as a sequence, inspect the
+                route on the map, view mile markers near the trajectory, and open current locations in Google Maps.
+            </p>
+            <p class="note">
+                Best viewed on a laptop or desktop computer screen. It may be difficult to navigate on a mobile
+                phone or smaller screen because the 360 viewer and map are designed for side-by-side review.
+            </p>
+        </section>
+
+        <section class="panel">
+            <h2>How To Start</h2>
+            <ol>
+                <li>Use the <strong>dropdown menu in the top right</strong> to choose a recording. The dropdown label indicates the time when the recording started.</li>
+                <li>After a recording is selected, the 360 images and GPS trajectory load automatically.</li>
+                <li>Click <strong>Play</strong> to begin playback. After playback starts, click <strong>Pause</strong> or press <strong>Space</strong> or <strong>P</strong> to pause or resume.</li>
+                <li>Adjust the playback speed using the <strong>Speed</strong> input.</li>
+                <li>Use <strong>&gt;</strong> and <strong>&lt;</strong> to move one image at a time.</li>
+                <li>Use <strong>&gt;&gt;</strong> and <strong>&lt;&lt;</strong> to jump forward or backward by the selected step size.</li>
+            </ol>
+            <p class="note">
+                Map notes: use <strong>Mile Markers</strong> to show or hide railway mile posts, and
+                <strong>MM Labels</strong> to show or hide their names. If the map is zoomed out too far,
+                mile markers and labels are hidden and their checkboxes are disabled until you zoom back in.
+                Click <strong>Reset Map</strong> above the map to return to the original trajectory view.
+            </p>
+        </section>
+
+        <div class="grid">
+            <section class="panel">
+                <h2>360 Viewer</h2>
+                <ul>
+                    <li>Click and drag inside the 360 image to look around.</li>
+                    <li>Use the mouse wheel or trackpad gesture to zoom in and out.</li>
+                    <li>The image changes as playback advances through the recording.</li>
+                </ul>
+            </section>
+
+            <section class="panel">
+                <h2>Track Map</h2>
+                <ul>
+                    <li>The map on the right shows the trajectory for the selected recording.</li>
+                    <li>The red marker shows the current image location.</li>
+                    <li>The <strong>Mile Markers</strong> checkbox controls railway mile post points.</li>
+                    <li>The <strong>MM Labels</strong> checkbox controls mile marker names when mile markers are visible.</li>
+                    <li>The <strong>Show GPS</strong> checkbox controls the current GPS label.</li>
+                    <li>The current-location line below the controls includes a link to open the coordinate in Google Maps.</li>
+                </ul>
+            </section>
+        </div>
+
+        <section class="panel">
+            <h2>Contact</h2>
+            <div class="contact-card">
+                <div class="contact-row">
+                    <span>Contact</span>
+                    <span>Kevin McGrath</span>
+                </div>
+                <div class="contact-row">
+                    <span>Email</span>
+                    <span><a id="contactEmail" href="#" rel="nofollow">Loading contact email...</a></span>
+                </div>
+                <div class="contact-row">
+                    <span>Phone</span>
+                    <span>(857) 368-8737</span>
+                </div>
+            </div>
+        </section>
+
+        <footer class="site-footer">
+            <strong>UMass Lowell</strong> | <strong>MassDOT Rail and Transit Division</strong> | PI: <a href="https://www.uml.edu/engineering/civil-environmental/faculty-staff-students/faculty/xie-yuanchang.aspx" target="_blank" rel="noopener noreferrer">Dr. Yuanchang Xie</a> | Developed by <a href="https://zubinb.com/" target="_blank" rel="noopener noreferrer">Dr. Zubin Bhuyan</a>
+            
+        </footer>
+    </main>
+
+    <script>
+        const emailLink = document.getElementById("contactEmail");
+        const user = ["kevin", "mcgrath"].join(".");
+        const domain = ["dot", "state", "ma", "us"].join(".");
+        const address = `${user}@${domain}`;
+
+        emailLink.textContent = address;
+        emailLink.href = `mailto:${address}`;
+    </script>
+</body>
+</html>

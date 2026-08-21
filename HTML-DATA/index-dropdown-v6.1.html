@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>360 Image Viewer and GPS Map</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    />
+
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.css"
+    />
+
+    <style>
+        main {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            margin: 3em 0;
+        }
+
+        body {
+            font-size: 16px;
+            background: #121212;
+            color: rgba(255, 255, 255, 0.8);
+            background: rgb(2, 0, 36);
+            background: linear-gradient(
+                0deg,
+                rgba(2, 0, 36, 1) 0%,
+                rgba(46, 46, 46, 1) 100%
+            );
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+
+        #stepSize {
+            background: none;
+            border: 0;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.2em;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 0.4em;
+        }
+
+        button {
+            border-radius: 0.5em;
+            border: none;
+            background: none;
+            color: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        button:hover:not(:disabled) {
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        #viewer {
+            height: 400px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5em 0.5em 0 0;
+            box-sizing: border-box;
+        }
+
+        .map-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+        }
+
+        .map-subcontainers {
+            width: 47.5%;
+        }
+
+        .footnote {
+            margin-bottom: 0.75em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        #status {
+            margin-top: 1em;
+            line-height: 1.4;
+        }
+
+        #map {
+            height: 400px;
+            margin-right: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5em;
+        }
+
+        #map2 {
+            height: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5em;
+        }
+
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 2em;
+            border-radius: 0 0 0.5em 0.5em;
+            border-top: 0;
+        }
+
+        #controls button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .blue-dot {
+            background-color: rgb(34, 34, 250);
+            border-radius: 50%;
+            width: 8px;
+            height: 8px;
+            border: 1px solid rgb(180, 180, 209);
+        }
+
+        .current-dot {
+            background-color: rgb(128, 0, 0);
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+        }
+
+        .pnlm-container {
+            background: none;
+        }
+
+        .test-block {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        h1 {
+            margin: 0;
+        }
+
+        select {
+            background: none;
+            outline: none;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 0em 1em;
+            border-radius: 0.5em;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 420px;
+        }
+
+        select:hover {
+            cursor: pointer;
+        }
+
+        option {
+            color: black;
+        }
+
+        #sortedFilesList {
+            margin-top: 2em;
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 0.9em;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <header>
+            <h1>360 Image Viewer and GPS Map</h1>
+        </header>
+
+        <div id="viewer" class="test-block">
+            <p class="test-item footnote">No preview available</p>
+        </div>
+
+        <div id="controls">
+            <div>
+                <button id="prevButton" disabled>&lt;</button>
+                <button id="nextButton" disabled>&gt;</button>
+                &nbsp; &nbsp; &nbsp; &nbsp;
+                <button id="prevXButton" disabled>&lt;&lt;</button>
+                <input
+                    style="text-align: center"
+                    type="number"
+                    id="stepSize"
+                    value="5"
+                    min="2"
+                    max="20"
+                />
+                <button id="nextXButton" disabled>&gt;&gt;</button>
+            </div>
+
+            <select id="dropdown" name="dataset">
+                <option value="-">Loading datasets...</option>
+            </select>
+        </div>
+
+        <p id="status" class="footnote"></p>
+
+        <div class="map-container">
+            <div class="map-subcontainers">
+                <p class="footnote">TRACK MAP</p>
+                <div id="map" class="test-block">
+                    <p class="test-item footnote">Map data unavailable</p>
+                </div>
+            </div>
+
+            <div class="map-subcontainers">
+                <p class="footnote">SITE OF RECORDING</p>
+                <div id="map2" class="test-block">
+                    <p class="test-item footnote">Map data unavailable</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 
+            The sorted image path list is still supported.
+            It is hidden by default.
+            Set SHOW_SORTED_FILE_LIST = true in JS to show it.
+        -->
+        <ul id="sortedFilesList" hidden></ul>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+
+    <script>
+        "use strict";
+
+        /*
+            Main settings
+        */
+        const DATA_DIR_LIST_PATH = "data/text_info/data_dir_list.txt";
+
+        /*
+            Keep image paths sorted before reading GPS EXIF.
+            This means if duplicate GPS points are skipped, the first file
+            in sorted order is kept.
+        */
+        const SORT_IMAGE_PATHS = true;
+
+        /*
+            True by default:
+            after sorting and reading GPS EXIF, if multiple images have the
+            same GPS coordinate, only the first one is kept.
+        */
+        const SKIP_DUPLICATE_GPS_POINTS = true;
+
+        /*
+            Used only when SKIP_DUPLICATE_GPS_POINTS is true.
+            7 decimal places is very strict, roughly centimeter-level.
+            If you want less strict duplicate detection, use 6 or 5.
+        */
+        const DUPLICATE_GPS_DECIMAL_PLACES = 7;
+
+        /*
+            False by default, because you did not want the file list visible
+            below the maps. The sorted list is still created internally.
+            Set to true if you want to display it again.
+        */
+        const SHOW_SORTED_FILE_LIST = false;
+
+        const IMAGE_EXTENSIONS = /\.(jpe?g|png)$/i;
+        const EXIF_READ_CONCURRENCY = 8;
+
+        let currentIndex = 0;
+        let uniquePoints = [];
+        let markers = [];
+        let map = null;
+        let map2 = null;
+        let marker2 = null;
+        let panoramaViewer = null;
+
+        /*
+            This keeps the sorted image list available in code even when
+            SHOW_SORTED_FILE_LIST is false.
+        */
+        let sortedImagePaths = [];
+
+        const blueDotIcon = L.divIcon({
+            className: "blue-dot",
+            iconSize: [8, 8],
+            popupAnchor: [0, -5],
+        });
+
+        const currentDotIcon = L.divIcon({
+            className: "current-dot",
+            iconSize: [14, 14],
+            popupAnchor: [0, -8],
+        });
+
+        function setStatus(message) {
+            document.getElementById("status").textContent = message || "";
+        }
+
+        function setNavigationDisabled(disabled) {
+            document.getElementById("prevButton").disabled = disabled;
+            document.getElementById("nextButton").disabled = disabled;
+            document.getElementById("prevXButton").disabled = disabled;
+            document.getElementById("nextXButton").disabled = disabled;
+        }
+
+        function normalizeWebPath(path) {
+            return String(path).trim().replace(/\\/g, "/");
+        }
+
+        function pathToUrl(path) {
+            return normalizeWebPath(path)
+                .split("/")
+                .map(part => encodeURIComponent(part))
+                .join("/");
+        }
+
+        function getBaseName(path) {
+            const normalized = normalizeWebPath(path);
+            return normalized.split("/").pop();
+        }
+
+        function getDatasetLabel(txtFilePath) {
+            const baseName = getBaseName(txtFilePath).replace(/\.txt$/i, "");
+            const parts = baseName.split("_");
+
+            /*
+                Expected folder/file name example:
+                LRV_20240815_083847_01_014-GPS-frames-1_SEC-CSV-small
+
+                parts[0] = LRV
+                parts[1] = 20240815
+                parts[2] = 083847
+            */
+            if (parts.length >= 3) {
+                const datePart = parts[1];
+                const timePart = parts[2];
+
+                const validDate = /^\d{8}$/.test(datePart);
+                const validTime = /^\d{6}$/.test(timePart);
+
+                if (validDate && validTime) {
+                    const year = datePart.slice(0, 4);
+                    const month = datePart.slice(4, 6);
+                    const day = datePart.slice(6, 8);
+
+                    const hour = timePart.slice(0, 2);
+                    const minute = timePart.slice(2, 4);
+                    const second = timePart.slice(4, 6);
+
+                    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+                }
+            }
+
+            return baseName;
+        }
+
+        function isHiddenPath(path) {
+            const parts = normalizeWebPath(path).split("/");
+
+            return parts.some(part => {
+                if (!part || part === "." || part === "..") {
+                    return false;
+                }
+
+                return part.startsWith(".") || part.startsWith("._");
+            });
+        }
+
+        function isAllowedImagePath(path) {
+            const name = getBaseName(path);
+
+            if (!IMAGE_EXTENSIONS.test(name)) {
+                return false;
+            }
+
+            if (name.startsWith(".") || name.startsWith("._")) {
+                return false;
+            }
+
+            return !isHiddenPath(path);
+        }
+
+        function parseTextList(text) {
+            return text
+                .split(/\r?\n/)
+                .map(line => normalizeWebPath(line))
+                .filter(line => line.length > 0)
+                .filter(line => !line.startsWith("#"));
+        }
+
+        async function fetchTextFile(path) {
+            const response = await fetch(pathToUrl(path), {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Could not read ${path}. HTTP ${response.status} ${response.statusText}`
+                );
+            }
+
+            return response.text();
+        }
+
+        function rationalToNumber(value) {
+            if (typeof value === "number") {
+                return value;
+            }
+
+            if (typeof value === "string") {
+                return Number(value);
+            }
+
+            if (
+                value &&
+                typeof value === "object" &&
+                "numerator" in value &&
+                "denominator" in value
+            ) {
+                if (value.denominator === 0) {
+                    return NaN;
+                }
+
+                return value.numerator / value.denominator;
+            }
+
+            return NaN;
+        }
+
+        function gpsDMSToDecimal(dms, ref) {
+            if (!Array.isArray(dms) || dms.length < 3) {
+                return null;
+            }
+
+            const degrees = rationalToNumber(dms[0]);
+            const minutes = rationalToNumber(dms[1]);
+            const seconds = rationalToNumber(dms[2]);
+
+            if (
+                !Number.isFinite(degrees) ||
+                !Number.isFinite(minutes) ||
+                !Number.isFinite(seconds)
+            ) {
+                return null;
+            }
+
+            let decimal = degrees + minutes / 60 + seconds / 3600;
+            const direction = String(ref || "").trim().toUpperCase();
+
+            if (direction === "S" || direction === "W") {
+                decimal *= -1;
+            }
+
+            return decimal;
+        }
+
+        async function readGpsFromImage(imagePath) {
+            const response = await fetch(pathToUrl(imagePath), {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Could not read image ${imagePath}. HTTP ${response.status} ${response.statusText}`
+                );
+            }
+
+            const buffer = await response.arrayBuffer();
+            const tags = EXIF.readFromBinaryFile(buffer) || {};
+
+            const lat = gpsDMSToDecimal(tags.GPSLatitude, tags.GPSLatitudeRef);
+            const lon = gpsDMSToDecimal(tags.GPSLongitude, tags.GPSLongitudeRef);
+
+            if (lat === null || lon === null) {
+                return null;
+            }
+
+            return {
+                name: getBaseName(imagePath),
+                path: imagePath,
+                imageSrc: pathToUrl(imagePath),
+                lat,
+                lon,
+            };
+        }
+
+        async function mapWithConcurrency(items, limit, mapper, onProgress) {
+            const results = new Array(items.length);
+            let nextIndex = 0;
+            let finished = 0;
+
+            async function worker() {
+                while (nextIndex < items.length) {
+                    const index = nextIndex;
+                    nextIndex += 1;
+
+                    try {
+                        results[index] = await mapper(items[index], index);
+                    } catch (error) {
+                        console.warn(error);
+                        results[index] = null;
+                    }
+
+                    finished += 1;
+
+                    if (onProgress) {
+                        onProgress(finished, items.length);
+                    }
+                }
+            }
+
+            const workerCount = Math.min(limit, items.length);
+            const workers = Array.from({ length: workerCount }, worker);
+
+            await Promise.all(workers);
+
+            return results;
+        }
+
+        function makeDuplicateGpsKey(point) {
+            return [
+                point.lat.toFixed(DUPLICATE_GPS_DECIMAL_PLACES),
+                point.lon.toFixed(DUPLICATE_GPS_DECIMAL_PLACES),
+            ].join(",");
+        }
+
+        function filterDuplicateGpsPoints(points) {
+            if (!SKIP_DUPLICATE_GPS_POINTS) {
+                return {
+                    points,
+                    skippedDuplicateCount: 0,
+                };
+            }
+
+            const seen = new Set();
+            const filtered = [];
+            let skippedDuplicateCount = 0;
+
+            for (const point of points) {
+                const key = makeDuplicateGpsKey(point);
+
+                if (seen.has(key)) {
+                    skippedDuplicateCount += 1;
+                    continue;
+                }
+
+                seen.add(key);
+                filtered.push(point);
+            }
+
+            return {
+                points: filtered,
+                skippedDuplicateCount,
+            };
+        }
+
+        function resetBox(id, message) {
+            const element = document.getElementById(id);
+            element.className = "test-block";
+            element.innerHTML = `<p class="test-item footnote">${message}</p>`;
+        }
+
+        function prepareMapBox(id) {
+            const element = document.getElementById(id);
+            element.className = "";
+            element.innerHTML = "";
+        }
+
+        function clear() {
+            uniquePoints = [];
+            sortedImagePaths = [];
+            markers = [];
+            currentIndex = 0;
+            marker2 = null;
+
+            if (panoramaViewer && typeof panoramaViewer.destroy === "function") {
+                panoramaViewer.destroy();
+            }
+
+            panoramaViewer = null;
+
+            if (map) {
+                map.remove();
+                map = null;
+            }
+
+            if (map2) {
+                map2.remove();
+                map2 = null;
+            }
+
+            resetBox("viewer", "No preview available");
+            resetBox("map", "Map data unavailable");
+            resetBox("map2", "Map data unavailable");
+
+            const sortedFilesList = document.getElementById("sortedFilesList");
+
+            if (sortedFilesList) {
+                sortedFilesList.innerHTML = "";
+                sortedFilesList.hidden = !SHOW_SORTED_FILE_LIST;
+            }
+
+            setNavigationDisabled(true);
+        }
+
+        async function loadDatasetDropdown() {
+            const dropdown = document.getElementById("dropdown");
+
+            try {
+                setStatus(`Loading ${DATA_DIR_LIST_PATH}...`);
+
+                const text = await fetchTextFile(DATA_DIR_LIST_PATH);
+
+                const datasetTxtFiles = parseTextList(text)
+                    .filter(path => /\.txt$/i.test(path))
+                    .filter(path => !isHiddenPath(path));
+
+                dropdown.innerHTML = "";
+
+                const defaultOption = document.createElement("option");
+                defaultOption.value = "-";
+                defaultOption.textContent = "Choose dataset";
+                dropdown.appendChild(defaultOption);
+
+                for (const txtFilePath of datasetTxtFiles) {
+                    const option = document.createElement("option");
+                    option.value = txtFilePath;
+                    option.textContent = getDatasetLabel(txtFilePath);
+
+                    /*
+                        Keeps the full path visible on hover.
+                    */
+                    option.title = txtFilePath;
+
+                    dropdown.appendChild(option);
+                }
+
+                setStatus(
+                    `Loaded ${datasetTxtFiles.length} dataset list file(s) from ${DATA_DIR_LIST_PATH}.`
+                );
+            } catch (error) {
+                console.error(error);
+
+                dropdown.innerHTML = "";
+
+                const option = document.createElement("option");
+                option.value = "-";
+                option.textContent = "Could not load dataset list";
+                dropdown.appendChild(option);
+
+                setStatus(error.message);
+            }
+        }
+
+        async function changeDataset(datasetListTxtPath) {
+            if (datasetListTxtPath === "-") {
+                clear();
+                setStatus("");
+                return;
+            }
+
+            clear();
+
+            try {
+                setStatus(`Loading image list: ${datasetListTxtPath}`);
+
+                const text = await fetchTextFile(datasetListTxtPath);
+
+                let imagePaths = parseTextList(text)
+                    .filter(isAllowedImagePath);
+
+                if (SORT_IMAGE_PATHS) {
+                    imagePaths = imagePaths.sort((a, b) =>
+                        a.localeCompare(b, undefined, { numeric: true })
+                    );
+                }
+
+                sortedImagePaths = imagePaths.slice();
+
+                renderSortedFileList(sortedImagePaths);
+
+                if (imagePaths.length === 0) {
+                    setStatus(`No jpg/png image paths found in ${datasetListTxtPath}.`);
+                    return;
+                }
+
+                setStatus(`Reading GPS EXIF from ${imagePaths.length} image(s)...`);
+
+                const rawPoints = await mapWithConcurrency(
+                    imagePaths,
+                    EXIF_READ_CONCURRENCY,
+                    readGpsFromImage,
+                    (finished, total) => {
+                        setStatus(`Reading GPS EXIF: ${finished}/${total}`);
+                    }
+                );
+
+                const gpsPoints = rawPoints.filter(Boolean);
+
+                const duplicateResult = filterDuplicateGpsPoints(gpsPoints);
+                uniquePoints = duplicateResult.points;
+
+                if (uniquePoints.length === 0) {
+                    setStatus(
+                        `No GPS EXIF coordinates found. Checked ${imagePaths.length} image(s).`
+                    );
+                    return;
+                }
+
+                initMap1();
+                initMap2();
+                generateMarkers();
+                showImage(0);
+
+                setNavigationDisabled(false);
+
+                const noGpsCount = imagePaths.length - gpsPoints.length;
+                const duplicateCount = duplicateResult.skippedDuplicateCount;
+
+                setStatus(
+                    `Loaded ${uniquePoints.length} GPS point(s). ` +
+                    `${noGpsCount} image(s) had no readable GPS EXIF. ` +
+                    `${duplicateCount} duplicate GPS point(s) skipped. ` +
+                    `Showing 1/${uniquePoints.length}: ${uniquePoints[0].path}`
+                );
+            } catch (error) {
+                console.error(error);
+                clear();
+                setStatus(error.message);
+            }
+        }
+
+        function renderSortedFileList(imagePaths) {
+            const list = document.getElementById("sortedFilesList");
+
+            if (!list) {
+                return;
+            }
+
+            list.innerHTML = "";
+            list.hidden = !SHOW_SORTED_FILE_LIST;
+
+            if (!SHOW_SORTED_FILE_LIST) {
+                return;
+            }
+
+            for (const imagePath of imagePaths) {
+                const item = document.createElement("li");
+                item.textContent = imagePath;
+                list.appendChild(item);
+            }
+        }
+
+        function initMap1() {
+            prepareMapBox("map");
+
+            map = L.map("map").setView([0, 0], 2);
+
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 18,
+            }).addTo(map);
+        }
+
+        function initMap2() {
+            prepareMapBox("map2");
+
+            const firstPoint = uniquePoints[0];
+
+            map2 = L.map("map2", {
+                center: [firstPoint.lat, firstPoint.lon],
+                zoom: 8,
+                zoomControl: false,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                keyboard: false,
+            });
+
+            L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution:
+                    '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            }).addTo(map2);
+
+            marker2 = L.marker([firstPoint.lat, firstPoint.lon]);
+            marker2.addTo(map2).bindPopup("Location of recording.").openPopup();
+        }
+
+        function generateMarkers() {
+            markers = uniquePoints.map((point, index) => {
+                const marker = L.marker([point.lat, point.lon], {
+                    icon: blueDotIcon,
+                    pointIndex: index,
+                })
+                    .on("click", () => {
+                        showImage(index);
+                    })
+                    .addTo(map)
+                    .bindPopup(
+                        `${escapeHtml(point.name)}<br>` +
+                        `Latitude: ${point.lat}<br>` +
+                        `Longitude: ${point.lon}`
+                    );
+
+                return marker;
+            });
+
+            if (markers.length === 1) {
+                map.setView([uniquePoints[0].lat, uniquePoints[0].lon], 18);
+            } else {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds(), {
+                    padding: [20, 20],
+                });
+            }
+
+            setTimeout(() => {
+                map.invalidateSize();
+
+                if (map2) {
+                    map2.invalidateSize();
+                }
+            }, 0);
+        }
+
+        function showImage(index) {
+            if (uniquePoints.length === 0) {
+                return;
+            }
+
+            currentIndex = Math.max(0, Math.min(index, uniquePoints.length - 1));
+
+            const point = uniquePoints[currentIndex];
+
+            if (panoramaViewer && typeof panoramaViewer.destroy === "function") {
+                panoramaViewer.destroy();
+            }
+
+            document.getElementById("viewer").className = "";
+            document.getElementById("viewer").innerHTML = "";
+
+            panoramaViewer = pannellum.viewer("viewer", {
+                type: "equirectangular",
+                panorama: point.imageSrc,
+                autoLoad: true,
+                yaw: 270,
+                pitch: -10,
+                hfov: 120,
+            });
+
+            highlightMarker(currentIndex);
+
+            if (map) {
+                map.panTo([point.lat, point.lon], {
+                    animate: true,
+                });
+            }
+
+            setStatus(
+                `Showing ${currentIndex + 1}/${uniquePoints.length}: ${point.path}`
+            );
+        }
+
+        function highlightMarker(index) {
+            markers.forEach((marker, markerIndex) => {
+                if (markerIndex === index) {
+                    marker.setIcon(currentDotIcon);
+                } else {
+                    marker.setIcon(blueDotIcon);
+                }
+            });
+        }
+
+        function showNextImage() {
+            showImage(currentIndex + 1);
+        }
+
+        function showPreviousImage() {
+            showImage(currentIndex - 1);
+        }
+
+        function showNextXImage() {
+            const stepSize =
+                parseInt(document.getElementById("stepSize").value, 10) || 5;
+
+            showImage(currentIndex + stepSize);
+        }
+
+        function showPreviousXImage() {
+            const stepSize =
+                parseInt(document.getElementById("stepSize").value, 10) || 5;
+
+            showImage(currentIndex - stepSize);
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        document
+            .getElementById("dropdown")
+            .addEventListener("change", event => changeDataset(event.target.value));
+
+        document
+            .getElementById("nextButton")
+            .addEventListener("click", showNextImage);
+
+        document
+            .getElementById("prevButton")
+            .addEventListener("click", showPreviousImage);
+
+        document
+            .getElementById("nextXButton")
+            .addEventListener("click", showNextXImage);
+
+        document
+            .getElementById("prevXButton")
+            .addEventListener("click", showPreviousXImage);
+
+        loadDatasetDropdown();
+    </script>
+</body>
+</html>

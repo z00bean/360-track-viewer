@@ -1,0 +1,2392 @@
+<!DOCTYPE html>
+<!--
+    360 Image Viewer and GPS Map
+    Version 7.1
+
+    Difference from previous version:
+    - Removes SITE OF RECORDING map and focuses on 360 viewer plus TRACK MAP.
+    - Loads GPS data from markers.txt if available (faster), falls back to EXIF reading if not found.
+    - Adds Auto-play / Pause button between Previous and Next.
+    - Adds speed control, default 3 images per second.
+    - Keeps the existing Pannellum scene switching and panorama preloading.
+    - Keeps GPS duplicate skipping enabled by default.
+    - Keeps sorted image-path list available in code, hidden by default.
+    - Shows TRACK MAP as a blue polyline instead of visible blue point circles.
+    - Shows the current GPS location as a larger red circle with a permanent GPS label.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="author" content="Zubin Bhuyan, UMass Lowell" />
+    <meta name="robots" content="index, follow" />
+    <meta name="googlebot" content="index, follow" />
+    <meta
+        name="description"
+        content="MassDOT Rail and Transit Division 360 image viewer and GPS trajectory map developed with UMass Lowell."
+    />
+    <title>360 Image Viewer and GPS Map - v7.1</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    />
+
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.css"
+    />
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #080b10;
+            --panel: #111820;
+            --panel-soft: #151d26;
+            --line: rgba(255, 255, 255, 0.12);
+            --line-strong: rgba(255, 255, 255, 0.22);
+            --text: rgba(255, 255, 255, 0.9);
+            --muted: rgba(255, 255, 255, 0.58);
+            --dim: rgba(255, 255, 255, 0.4);
+            --cyan: #4fd1c5;
+            --blue: #4f83ff;
+            --amber: #f2a33a;
+            --green: #6ee7a8;
+            --danger: #b11f3b;
+            --radius: 8px;
+            --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font: 16px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background:
+                linear-gradient(180deg, rgba(79, 131, 255, 0.1), transparent 28rem),
+                linear-gradient(135deg, #080b10 0%, #101319 48%, #070a0f 100%);
+            color: var(--text);
+        }
+
+        main {
+            width: min(1760px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 24px 0 38px;
+        }
+
+        header {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+            gap: 18px;
+            align-items: end;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(24px, 2.2vw, 38px);
+            line-height: 1.05;
+            letter-spacing: 0;
+        }
+
+        .eyebrow {
+            margin: 0 0 8px;
+            color: var(--cyan);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .site-footer {
+            margin-top: 18px;
+            padding: 14px 0 0;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .site-footer strong {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        .contact-strip {
+            margin-top: 18px;
+            padding: 14px 16px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            align-items: center;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(17, 24, 32, 0.72);
+            box-shadow: var(--shadow);
+        }
+
+        .contact-strip strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .contact-strip span,
+        .contact-strip a {
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .contact-strip a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        .contact-strip a:hover,
+        .contact-strip a:focus-visible {
+            text-decoration: underline;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .help-button {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            padding: 9px 14px;
+            border: 1px solid var(--line-strong);
+            border-radius: 7px;
+            background: rgba(79, 209, 197, 0.12);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .help-button:hover,
+        .help-button:focus-visible {
+            border-color: rgba(79, 209, 197, 0.75);
+            background: rgba(79, 209, 197, 0.2);
+            outline: none;
+        }
+
+        .panel,
+        #controls,
+        .current-pos-info {
+            background: var(--panel);
+            background: color-mix(in srgb, var(--panel) 92%, white 8%);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .panel {
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            min-height: 46px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .section-title {
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .section-meta,
+        .footnote {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .primary-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(380px, 0.9fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        #viewer,
+        #map {
+            width: 100%;
+            height: clamp(460px, 62vh, 760px);
+            min-height: 420px;
+        }
+
+        #viewer,
+        #map {
+            border: 0;
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            padding: 12px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            box-shadow: none;
+        }
+
+        .left-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .nav-group,
+        .jump-group,
+        .speed-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .speed-group {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        button,
+        select,
+        input {
+            font: inherit;
+        }
+
+        button {
+            min-height: 38px;
+            min-width: 42px;
+            padding: 8px 14px;
+            border-radius: 7px;
+            border: 1px solid var(--line-strong);
+            background: rgba(255, 255, 255, 0.045);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        button:hover:not(:disabled) {
+            border-color: rgba(79, 209, 197, 0.65);
+            background: rgba(79, 209, 197, 0.12);
+            color: #fff;
+        }
+
+        button:disabled,
+        input:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        #playPauseButton {
+            min-width: 82px;
+        }
+
+        #stepSize,
+        #autoplayFps {
+            width: 58px;
+            min-height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+            background: rgba(0, 0, 0, 0.18);
+            color: var(--text);
+            padding: 6px;
+            text-align: center;
+        }
+
+        select {
+            width: 100%;
+            min-height: 42px;
+            outline: none;
+            border: 1px solid var(--line-strong);
+            border-radius: 7px;
+            background: rgba(12, 17, 23, 0.92);
+            color: var(--text);
+            padding: 9px 12px;
+        }
+
+        select:hover {
+            cursor: pointer;
+            border-color: rgba(79, 209, 197, 0.55);
+        }
+
+        option {
+            color: #111;
+        }
+
+        .label-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .label-row input {
+            accent-color: var(--cyan);
+        }
+
+        .track-toggles {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        #status {
+            display: none;
+            margin: 12px 0 0;
+            padding: 10px 12px;
+            border-left: 3px solid var(--cyan);
+            border-radius: 6px;
+            background: rgba(79, 209, 197, 0.08);
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        .current-pos-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 12px;
+            padding: 12px 14px;
+            box-shadow: none;
+        }
+
+        .current-pos-info strong {
+            color: #fff;
+            font-size: 16px;
+        }
+
+        #posCoords {
+            color: var(--muted);
+        }
+
+        /*
+            Kept for compatibility, but visible blue point markers are no longer used.
+            TRACK MAP now uses a blue polyline.
+        */
+        .blue-dot {
+            width: 8px;
+            height: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            background-color: var(--blue);
+        }
+
+        .track-click-target {
+            background: transparent;
+            border: none;
+        }
+
+        .current-dot {
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(255, 255, 255, 0.95);
+            border-radius: 50%;
+            background-color: var(--danger);
+            box-shadow: 0 0 0 5px rgba(177, 31, 59, 0.22), 0 0 18px rgba(255, 255, 255, 0.72);
+        }
+
+        .current-gps-tooltip {
+            padding: 7px 9px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 7px;
+            background: rgba(9, 12, 17, 0.94);
+            color: var(--text);
+            box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .current-gps-tooltip::before,
+        .leaflet-tooltip.current-gps-tooltip::before {
+            display: none;
+        }
+
+        .mile-marker-tooltip {
+            padding: 4px 7px;
+            border: 1px solid rgba(255, 214, 102, 0.75);
+            border-radius: 6px;
+            background: rgba(9, 12, 17, 0.94);
+            color: var(--text);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .mile-marker-tooltip::before,
+        .leaflet-tooltip.mile-marker-tooltip::before {
+            display: none;
+        }
+
+        .pnlm-container {
+            background: none;
+        }
+
+        .test-block {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #sortedFilesList {
+            margin-top: 18px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .hide-pannellum-loader .pnlm-load-box {
+            display: none !important;
+        }
+
+        @media (min-width: 1500px) {
+            .primary-grid {
+                grid-template-columns: minmax(0, 1.55fr) minmax(520px, 0.95fr);
+            }
+        }
+
+        @media (max-width: 1180px) {
+            main {
+                width: min(1000px, calc(100vw - 24px));
+            }
+
+            header,
+            .primary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #viewer,
+            #map {
+                height: clamp(380px, 56vh, 560px);
+            }
+
+        }
+
+        @media (max-width: 720px) {
+            main {
+                width: min(100% - 18px, 680px);
+                padding-top: 14px;
+            }
+
+            header {
+                gap: 12px;
+            }
+
+            #viewer,
+            #map {
+                min-height: 320px;
+                height: 54vh;
+            }
+
+            #controls {
+                align-items: stretch;
+            }
+
+            .contact-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .left-controls,
+            .nav-group,
+            .jump-group,
+            .speed-group {
+                width: 100%;
+            }
+
+            .nav-group button,
+            .jump-group button {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <header>
+            <div>
+                <p class="eyebrow">MassDOT Rail and Transit Division</p>
+                <h1>360 Image Viewer and GPS Map</h1>
+            </div>
+
+            <div class="header-actions">
+                <select id="dropdown" name="dataset">
+                    <option value="-">Loading datasets...</option>
+                </select>
+                <a class="help-button" href="instructions.html" title="Open instructions" aria-label="Open instructions">How to Use</a>
+            </div>
+        </header>
+
+        <div class="primary-grid">
+            <section class="panel viewer-panel">
+                <div class="panel-header">
+                    <span class="section-title">360 Viewer</span>
+                </div>
+                <div id="viewer" class="test-block">
+                    <p class="test-item footnote">No preview available</p>
+                </div>
+            </section>
+
+            <section class="panel track-panel">
+                <div class="panel-header">
+                    <span class="section-title">TRACK MAP</span>
+                    <div class="track-toggles">
+                        <label class="label-row"><input type="checkbox" id="toggleMileMarkers" checked> Mile Markers</label>
+                        <label class="label-row"><input type="checkbox" id="toggleGpsLabel"> Show GPS Label</label>
+                    </div>
+                </div>
+                <div id="map" class="test-block">
+                    <p class="test-item footnote">Map data unavailable</p>
+                </div>
+            </section>
+        </div>
+
+        <div id="controls">
+            <div class="left-controls">
+                <div class="nav-group">
+                    <button id="prevButton" disabled>&lt;</button>
+                    <button id="playPauseButton" aria-keyshortcuts="Space P" disabled>Play</button>
+                    <button id="nextButton" disabled>&gt;</button>
+                </div>
+
+                <div class="speed-group">
+                    <span>Speed</span>
+                    <input
+                        type="number"
+                        id="autoplayFps"
+                        value="4"
+                        min="1"
+                        max="12"
+                        step="1"
+                        disabled
+                    />
+                    <span>images/sec</span>
+                </div>
+
+                <div class="jump-group">
+                    <button id="prevXButton" disabled>&lt;&lt;</button>
+                    <input
+                        type="number"
+                        id="stepSize"
+                        value="5"
+                        min="2"
+                        max="20"
+                    />
+                    <button id="nextXButton" disabled>&gt;&gt;</button>
+                </div>
+            </div>
+        </div>
+
+        <p id="status" class="footnote"></p>
+
+        <div id="currentPosCard" class="current-pos-info" hidden>
+            <div id="posCoords">Lat: 0.000000 | Lon: 0.000000</div>
+        </div>
+
+        <!--
+            The sorted image path list is still supported.
+            It is hidden by default.
+            Set SHOW_SORTED_FILE_LIST = true in the JS settings below to show it.
+        -->
+        <ul id="sortedFilesList" hidden></ul>
+
+        <section class="contact-strip" aria-label="Project contact">
+            <div>
+                <strong>Contact</strong>
+                <span>Kevin McGrath</span>
+            </div>
+            <div>
+                <strong>Email</strong>
+                <a id="landingContactEmail" href="#" rel="nofollow">Loading contact email...</a>
+            </div>
+            <div>
+                <strong>Phone</strong>
+                <span>(857) 368-8737</span>
+            </div>
+        </section>
+
+        <footer class="site-footer">
+            <strong>UMass Lowell</strong> | <strong>MassDOT Rail and Transit Division</strong> 
+        </footer>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/pannellum/build/pannellum.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+    <script>
+        "use strict";
+
+        /*
+            Page version.
+        */
+        const VIEWER_VERSION = "7.1";
+        
+        // Unit system for current elevation readouts: 'metric' or 'imperial'
+        let UNIT_SYSTEM = 'imperial'; // Default to US units (miles, feet, mph)
+
+        /*
+            Main data source.
+            This file contains paths to dataset text files.
+        */
+        const DATA_DIR_LIST_PATH = "data/text_info/data_dir_list.txt";
+
+        /*
+            Sort image paths before reading GPS EXIF.
+            If duplicate GPS points are skipped, the first image in sorted order is kept.
+        */
+        const SORT_IMAGE_PATHS = true;
+
+        /*
+            True by default:
+            after sorting and reading GPS EXIF, if multiple images have the same
+            GPS coordinate, only the first one is kept.
+        */
+        const SKIP_DUPLICATE_GPS_POINTS = true;
+
+        /*
+            Used only when SKIP_DUPLICATE_GPS_POINTS is true.
+
+            7 decimal places is strict.
+            If your GPS values differ slightly even when they are basically the same point,
+            try 6 or 5.
+        */
+        const DUPLICATE_GPS_DECIMAL_PLACES = 5;
+
+        /*
+            False by default, because you did not want the file list visible below the maps.
+            The sorted list is still created internally.
+        */
+        const SHOW_SORTED_FILE_LIST = false;
+
+        /*
+            Panorama preloading settings.
+            These reduce the short Pannellum "loading" flash when clicking next/previous
+            and help auto-play feel smoother.
+        */
+        const PRELOAD_PANORAMA_IMAGES = true;
+        const PRELOAD_FORWARD_COUNT = 15;
+        const PRELOAD_BACKWARD_COUNT = 3;
+
+        /*
+            If true, the old panorama stays visible until the next one is preloaded.
+            If false, it switches immediately, but Pannellum may briefly show loading.
+        */
+        const WAIT_FOR_PRELOAD_BEFORE_SWITCH = true;
+
+        /*
+            Hides the small Pannellum loading box.
+            This does not make images load faster; preloading does that.
+        */
+        const HIDE_PANNELLUM_LOADING_BOX = true;
+
+        /*
+            Initial view settings for every panorama.
+        */
+        const DEFAULT_PANORAMA_YAW = 270;
+        const DEFAULT_PANORAMA_PITCH = -10;
+        const DEFAULT_PANORAMA_HFOV = 120;
+
+        /*
+            If true, next/previous/auto-play keeps your current looking direction.
+            If false, every image starts at DEFAULT_PANORAMA_YAW/PITCH/HFOV.
+        */
+        const PRESERVE_VIEW_WHEN_SWITCHING = false;
+
+        /*
+            Keep the TRACK MAP centered on the whole trajectory by default.
+            Set this to true if you want the map to follow the red current-location dot.
+        */
+        const TRACK_MAP_FOLLOW_CURRENT_POINT = false;
+        const TRACK_MAP_ROUTE_PADDING = [42, 42];
+
+        /*
+            Auto-play settings.
+            Default is 6 images per second.
+            Lowest speed is 1 image/sec; max speed is 12 images/sec.
+        */
+        const AUTOPLAY_DEFAULT_IMAGES_PER_SECOND = 4;
+        const AUTOPLAY_MIN_IMAGES_PER_SECOND = 1;
+        const AUTOPLAY_MAX_IMAGES_PER_SECOND = 12;
+        const AUTOPLAY_SPEED_STEP = 1;
+
+        const IMAGE_EXTENSIONS = /\.(jpe?g|png)$/i;
+        const EXIF_READ_CONCURRENCY = 8;
+        const MILE_MARKERS_KMZ_PATH = "data/Mile_Posts.kmz";
+        const MILE_MARKER_PANE = "mileMarkersPane";
+        const MILE_MARKER_TOOLTIP_MIN_ZOOM = 14;
+        const MAX_MILE_MARKER_DISTANCE_KM = 0.15;// 0.75 km //1.609344;
+
+        let currentIndex = 0;
+        let uniquePoints = [];
+        let markers = [];
+        let map = null;
+        let panoramaViewer = null;
+
+        let sortedImagePaths = [];
+        let preloadPromises = new Map();
+        let showImageRequestId = 0;
+
+        let autoplayRunning = false;
+        let autoplayTimer = null;
+        let autoplayGeneration = 0;
+
+        /*
+            Blue line and current-location marker for TRACK MAP.
+        */
+        let trackPolyline = null;
+        let currentLocationMarker = null;
+        let mileMarkerLayer = null;
+        let mileMarkerData = null;
+        let mileMarkerLoadPromise = null;
+
+        if (HIDE_PANNELLUM_LOADING_BOX) {
+            document.documentElement.classList.add("hide-pannellum-loader");
+        }
+
+        const blueDotIcon = L.divIcon({
+            className: "blue-dot",
+            iconSize: [8, 8],
+            iconAnchor: [4, 4],
+            popupAnchor: [0, -5],
+        });
+
+        const trackClickTargetIcon = L.divIcon({
+            className: "track-click-target",
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+            popupAnchor: [0, -9],
+        });
+
+        const currentDotIcon = L.divIcon({
+            className: "current-dot",
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+            popupAnchor: [0, -11],
+        });
+
+        function setStatus(message){
+const s=document.getElementById("status");
+s.textContent=message||"";
+s.style.display=message?"block":"none";
+}
+
+        function setNavigationDisabled(disabled) {
+            document.getElementById("prevButton").disabled = disabled;
+            document.getElementById("nextButton").disabled = disabled;
+            document.getElementById("prevXButton").disabled = disabled;
+            document.getElementById("nextXButton").disabled = disabled;
+            document.getElementById("playPauseButton").disabled = disabled;
+            document.getElementById("autoplayFps").disabled = disabled;
+        }
+
+        function normalizeWebPath(path) {
+            return String(path).trim().replace(/\\/g, "/");
+        }
+
+        function pathToUrl(path) {
+            return normalizeWebPath(path)
+                .split("/")
+                .map(part => encodeURIComponent(part))
+                .join("/");
+        }
+
+        function getBaseName(path) {
+            const normalized = normalizeWebPath(path);
+            return normalized.split("/").pop();
+        }
+
+        function getDatasetLabel(txtFilePath) {
+            const baseName = getBaseName(txtFilePath).replace(/\.txt$/i, "");
+            const parts = baseName.split("_");
+
+            /*
+                Expected example:
+                LRV_20240815_083847_01_014-GPS-frames-1_SEC-CSV-small
+
+                parts[0] = LRV
+                parts[1] = 20240815
+                parts[2] = 083847
+            */
+            if (parts.length >= 3) {
+                const datePart = parts[1];
+                const timePart = parts[2];
+
+                const validDate = /^\d{8}$/.test(datePart);
+                const validTime = /^\d{6}$/.test(timePart);
+
+                if (validDate && validTime) {
+                    const year = datePart.slice(0, 4);
+                    const month = datePart.slice(4, 6);
+                    const day = datePart.slice(6, 8);
+
+                    const hour = timePart.slice(0, 2);
+                    const minute = timePart.slice(2, 4);
+                    const second = timePart.slice(4, 6);
+
+                    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+                }
+            }
+
+            return baseName;
+        }
+
+        function isHiddenPath(path) {
+            const parts = normalizeWebPath(path).split("/");
+
+            return parts.some(part => {
+                if (!part || part === "." || part === "..") {
+                    return false;
+                }
+
+                return part.startsWith(".") || part.startsWith("._");
+            });
+        }
+
+        function isAllowedImagePath(path) {
+            const name = getBaseName(path);
+
+            if (!IMAGE_EXTENSIONS.test(name)) {
+                return false;
+            }
+
+            if (name.startsWith(".") || name.startsWith("._")) {
+                return false;
+            }
+
+            return !isHiddenPath(path);
+        }
+
+        function parseTextList(text) {
+            return text
+                .split(/\r?\n/)
+                .map(line => normalizeWebPath(line))
+                .filter(line => line.length > 0)
+                .filter(line => !line.startsWith("#"));
+        }
+
+        async function fetchTextFile(path) {
+            const response = await fetch(pathToUrl(path), {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Could not read ${path}. HTTP ${response.status} ${response.statusText}`
+                );
+            }
+
+            return response.text();
+        }
+
+        function rationalToNumber(value) {
+            if (typeof value === "number") {
+                return value;
+            }
+
+            if (typeof value === "string") {
+                return Number(value);
+            }
+
+            if (
+                value &&
+                typeof value === "object" &&
+                "numerator" in value &&
+                "denominator" in value
+            ) {
+                if (value.denominator === 0) {
+                    return NaN;
+                }
+
+                return value.numerator / value.denominator;
+            }
+
+            return NaN;
+        }
+
+        function gpsDMSToDecimal(dms, ref) {
+            if (!Array.isArray(dms) || dms.length < 3) {
+                return null;
+            }
+
+            const degrees = rationalToNumber(dms[0]);
+            const minutes = rationalToNumber(dms[1]);
+            const seconds = rationalToNumber(dms[2]);
+
+            if (
+                !Number.isFinite(degrees) ||
+                !Number.isFinite(minutes) ||
+                !Number.isFinite(seconds)
+            ) {
+                return null;
+            }
+
+            let decimal = degrees + minutes / 60 + seconds / 3600;
+            const direction = String(ref || "").trim().toUpperCase();
+
+            if (direction === "S" || direction === "W") {
+                decimal *= -1;
+            }
+
+            return decimal;
+        }
+
+        function gpsAltitudeToMeters(value, ref) {
+            const meters = rationalToNumber(value);
+
+            if (!Number.isFinite(meters)) {
+                return null;
+            }
+
+            const refValue = rationalToNumber(ref);
+            const isBelowSeaLevel = Number.isFinite(refValue)
+                ? refValue === 1
+                : String(ref || "").trim() === "1";
+
+            return isBelowSeaLevel ? -Math.abs(meters) : meters;
+        }
+
+        function readExifDateTime(tags) {
+            const raw =
+                tags.DateTimeOriginal ||
+                tags.DateTimeDigitized ||
+                tags.DateTime ||
+                null;
+
+            if (!raw) {
+                return null;
+            }
+
+            const value = String(raw).trim();
+            const match = value.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+
+            if (match) {
+                const [, year, month, day, hour, minute, second = "00"] = match;
+                return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+            }
+
+            return value;
+        }
+
+        async function readGpsFromImage(imagePath) {
+            /*
+                Do not use cache: "no-store" here.
+                The image bytes downloaded for EXIF can also help the browser cache
+                when Pannellum later loads the same panorama.
+            */
+            const response = await fetch(pathToUrl(imagePath), {
+                cache: "force-cache",
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Could not read image ${imagePath}. HTTP ${response.status} ${response.statusText}`
+                );
+            }
+
+            const buffer = await response.arrayBuffer();
+            const tags = EXIF.readFromBinaryFile(buffer) || {};
+
+            const lat = gpsDMSToDecimal(tags.GPSLatitude, tags.GPSLatitudeRef);
+            const lon = gpsDMSToDecimal(tags.GPSLongitude, tags.GPSLongitudeRef);
+            const ele = gpsAltitudeToMeters(tags.GPSAltitude, tags.GPSAltitudeRef);
+            const time = readExifDateTime(tags);
+
+            if (lat === null || lon === null) {
+                return null;
+            }
+
+            return {
+                name: getBaseName(imagePath),
+                path: imagePath,
+                imageSrc: pathToUrl(imagePath),
+                lat,
+                lon,
+                ele,
+                time,
+            };
+        }
+
+        /**
+         * Parse markers.txt CSV file
+         * Format: image_file,lat,lon,ele,time
+         * Example: frame_00000000.jpg,42.6670102224114,-72.5282775556126,120.078737647273,2024-08-15 13:07:57
+         */
+        function parseMarkersTxt(text, imageDirectory) {
+            const lines = text.trim().split(/\r?\n/);
+            const markers = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Skip empty lines and header
+                if (!line || /^image_file/i.test(line)) {
+                    continue;
+                }
+                
+                // Split by comma, but handle trailing commas and spaces
+                const parts = line.split(',').map(p => p.trim());
+                if (parts.length < 3) {
+                    continue;
+                }
+                
+                const imageFile = parts[0];
+                const lat = parseFloat(parts[1]);
+                const lon = parseFloat(parts[2]);
+                const ele = parts.length > 3 && parts[3] ? parseFloat(parts[3]) : null;
+                const time = parts.length > 4 && parts[4] ? parts[4] : null;
+                
+                if (isNaN(lat) || isNaN(lon)) {
+                    continue;
+                }
+                
+                // Build full path
+                const imagePath = normalizeWebPath(imageDirectory + '/' + imageFile);
+                
+                markers.push({
+                    name: imageFile,
+                    path: imagePath,
+                    imageSrc: pathToUrl(imagePath),
+                    lat,
+                    lon,
+                    ele: ele !== null && !isNaN(ele) ? ele : null,
+                    time: time || null,
+                });
+            }
+            
+            return markers;
+        }
+
+        /**
+         * Try to load GPS data from markers.txt, fall back to EXIF reading if not found
+         */
+        async function loadGpsData(imagePaths, datasetListPath) {
+            const getDirectory = path => {
+                const normalized = normalizeWebPath(path);
+                const lastSlash = normalized.lastIndexOf("/");
+                return lastSlash >= 0 ? normalized.substring(0, lastSlash) : "";
+            };
+
+            const imageDirectory = imagePaths.length > 0
+                ? getDirectory(imagePaths[0])
+                : "";
+            const datasetDirectory = datasetListPath
+                ? getDirectory(datasetListPath)
+                : "";
+
+            const markerCandidates = Array.from(new Set([
+                imageDirectory ? normalizeWebPath(`${imageDirectory}/markers.txt`) : "",
+                datasetDirectory ? normalizeWebPath(`${datasetDirectory}/markers.txt`) : "",
+            ].filter(Boolean)));
+
+            for (const markersTxtPath of markerCandidates) {
+                try {
+                    setStatus(`Checking ${markersTxtPath}...`);
+
+                    const text = await fetchTextFile(markersTxtPath);
+                    const markers = parseMarkersTxt(text, imageDirectory || datasetDirectory);
+
+                    if (markers.length === 0) {
+                        console.warn(`${markersTxtPath} did not contain valid GPS rows.`);
+                        continue;
+                    }
+
+                    const markerMap = new Map();
+
+                    markers.forEach(marker => {
+                        markerMap.set(marker.name, marker);
+                        markerMap.set(getBaseName(marker.name), marker);
+                        markerMap.set(getBaseName(marker.path), marker);
+                    });
+
+                    const gpsPoints = [];
+
+                    for (const imagePath of imagePaths) {
+                        const imageName = getBaseName(imagePath);
+                        const marker = markerMap.get(imageName) || markerMap.get(imagePath);
+
+                        if (marker) {
+                            gpsPoints.push({
+                                name: imageName,
+                                path: imagePath,
+                                imageSrc: pathToUrl(imagePath),
+                                lat: marker.lat,
+                                lon: marker.lon,
+                                ele: marker.ele,
+                                time: marker.time,
+                            });
+                        }
+                    }
+
+                    if (gpsPoints.length > 0) {
+                        setStatus(`Loaded GPS data from ${markersTxtPath} for ${gpsPoints.length} image(s).`);
+
+                        return {
+                            points: gpsPoints,
+                            source: "markers.txt",
+                            sourceDetail: markersTxtPath,
+                        };
+                    }
+
+                    console.warn(`${markersTxtPath} was found, but no rows matched the image list.`);
+                } catch (error) {
+                    console.log(`markers.txt not available at ${markersTxtPath}: ${error.message}`);
+                }
+            }
+
+            setStatus(`No usable markers.txt found. Reading image GPS from ${imagePaths.length} image(s)...`);
+
+            const rawPoints = await mapWithConcurrency(
+                imagePaths,
+                EXIF_READ_CONCURRENCY,
+                readGpsFromImage,
+                (finished, total) => {
+                    setStatus(`Reading image GPS: ${finished}/${total}`);
+                }
+            );
+
+            const gpsPoints = rawPoints.filter(Boolean);
+
+            return {
+                points: gpsPoints,
+                source: "Image GPS",
+                sourceDetail: "EXIF embedded in images",
+            };
+        }
+
+        async function mapWithConcurrency(items, limit, mapper, onProgress) {
+            const results = new Array(items.length);
+            let nextIndex = 0;
+            let finished = 0;
+
+            async function worker() {
+                while (nextIndex < items.length) {
+                    const index = nextIndex;
+                    nextIndex += 1;
+
+                    try {
+                        results[index] = await mapper(items[index], index);
+                    } catch (error) {
+                        console.warn(error);
+                        results[index] = null;
+                    }
+
+                    finished += 1;
+
+                    if (onProgress) {
+                        onProgress(finished, items.length);
+                    }
+                }
+            }
+
+            const workerCount = Math.min(limit, items.length);
+            const workers = Array.from({ length: workerCount }, worker);
+
+            await Promise.all(workers);
+
+            return results;
+        }
+
+        function makeDuplicateGpsKey(point) {
+            return [
+                point.lat.toFixed(DUPLICATE_GPS_DECIMAL_PLACES),
+                point.lon.toFixed(DUPLICATE_GPS_DECIMAL_PLACES),
+            ].join(",");
+        }
+
+        function filterDuplicateGpsPoints(points) {
+            if (!SKIP_DUPLICATE_GPS_POINTS) {
+                return {
+                    points,
+                    skippedDuplicateCount: 0,
+                };
+            }
+
+            const seen = new Set();
+            const filtered = [];
+            let skippedDuplicateCount = 0;
+
+            for (const point of points) {
+                const key = makeDuplicateGpsKey(point);
+
+                if (seen.has(key)) {
+                    skippedDuplicateCount += 1;
+                    continue;
+                }
+
+                seen.add(key);
+                filtered.push(point);
+            }
+
+            return {
+                points: filtered,
+                skippedDuplicateCount,
+            };
+        }
+
+        function resetBox(id, message) {
+            const element = document.getElementById(id);
+            element.className = "test-block";
+            element.innerHTML = `<p class="test-item footnote">${message}</p>`;
+        }
+
+        function prepareMapBox(id) {
+            const element = document.getElementById(id);
+            element.className = "";
+            element.innerHTML = "";
+        }
+
+        function clear() {
+            stopAutoplay();
+
+            uniquePoints = [];
+            sortedImagePaths = [];
+            markers = [];
+            currentIndex = 0;
+            trackPolyline = null;
+            currentLocationMarker = null;
+            mileMarkerLayer = null;
+
+            preloadPromises.clear();
+            showImageRequestId += 1;
+
+            if (panoramaViewer && typeof panoramaViewer.destroy === "function") {
+                panoramaViewer.destroy();
+            }
+
+            panoramaViewer = null;
+
+            if (map) {
+                map.remove();
+                map = null;
+            }
+
+            resetBox("viewer", "No preview available");
+            resetBox("map", "Map data unavailable");
+
+            document.getElementById('currentPosCard').hidden=true;
+
+            const sortedFilesList = document.getElementById("sortedFilesList");
+
+            if (sortedFilesList) {
+                sortedFilesList.innerHTML = "";
+                sortedFilesList.hidden = !SHOW_SORTED_FILE_LIST;
+            }
+
+            setNavigationDisabled(true);
+            updatePlayPauseButton();
+        }
+
+        async function loadDatasetDropdown() {
+            const dropdown = document.getElementById("dropdown");
+
+            try {
+                setStatus(`Loading ${DATA_DIR_LIST_PATH}...`);
+
+                const text = await fetchTextFile(DATA_DIR_LIST_PATH);
+
+                const datasetTxtFiles = parseTextList(text)
+                    .filter(path => /\.txt$/i.test(path))
+                    .filter(path => !isHiddenPath(path));
+
+                dropdown.innerHTML = "";
+
+                const defaultOption = document.createElement("option");
+                defaultOption.value = "-";
+                defaultOption.textContent = "Choose dataset";
+                dropdown.appendChild(defaultOption);
+
+                for (const txtFilePath of datasetTxtFiles) {
+                    const option = document.createElement("option");
+                    option.value = txtFilePath;
+                    option.textContent = getDatasetLabel(txtFilePath);
+
+                    /*
+                        Full path visible on hover.
+                    */
+                    option.title = txtFilePath;
+
+                    dropdown.appendChild(option);
+                }
+
+                setStatus(
+                    `Loaded ${datasetTxtFiles.length} dataset list file(s) from ${DATA_DIR_LIST_PATH}.`
+                );
+            } catch (error) {
+                console.error(error);
+
+                dropdown.innerHTML = "";
+
+                const option = document.createElement("option");
+                option.value = "-";
+                option.textContent = "Could not load dataset list";
+                dropdown.appendChild(option);
+
+                setStatus(error.message);
+            }
+        }
+
+        async function changeDataset(datasetListTxtPath) {
+            if (datasetListTxtPath === "-") {
+                clear();
+                setStatus("");
+                return;
+            }
+
+            clear();
+
+            try {
+                setStatus(`Loading image list: ${datasetListTxtPath}`);
+
+                const text = await fetchTextFile(datasetListTxtPath);
+
+                let imagePaths = parseTextList(text)
+                    .filter(isAllowedImagePath);
+
+                if (SORT_IMAGE_PATHS) {
+                    imagePaths = imagePaths.sort((a, b) =>
+                        a.localeCompare(b, undefined, { numeric: true })
+                    );
+                }
+
+                sortedImagePaths = imagePaths.slice();
+                renderSortedFileList(sortedImagePaths);
+
+                if (imagePaths.length === 0) {
+                    setStatus(`No jpg/png image paths found in ${datasetListTxtPath}.`);
+                    return;
+                }
+
+                // Load GPS data from markers.txt or EXIF
+                const gpsResult = await loadGpsData(imagePaths, datasetListTxtPath);
+                const gpsPoints = gpsResult.points;
+                const gpsSource = gpsResult.source;
+                
+                const duplicateResult = filterDuplicateGpsPoints(gpsPoints);
+
+                uniquePoints = duplicateResult.points;
+
+                if (uniquePoints.length === 0) {
+                    setStatus(
+                        `No GPS coordinates found. Checked ${imagePaths.length} image(s) using ${gpsSource}.`
+                    );
+                    return;
+                }
+
+                /*
+                    Start warming the first group of panoramas before the first view appears.
+                */
+                preloadAroundIndex(0);
+
+                initMap1();
+                generateMarkers();
+
+                setNavigationDisabled(false);
+                updatePlayPauseButton();
+
+                await showImage(0);
+
+                const noGpsCount = imagePaths.length - gpsPoints.length;
+                const duplicateCount = duplicateResult.skippedDuplicateCount;
+
+                setStatus(
+                    `Loaded ${uniquePoints.length} GPS point(s) from ${gpsSource}. ` +
+                    `${noGpsCount} image(s) had no GPS data. ` +
+                    `${duplicateCount} duplicate GPS point(s) skipped. ` +
+                    `Showing 1/${uniquePoints.length}: ${uniquePoints[0].path}`
+                );
+            } catch (error) {
+                console.error(error);
+                clear();
+                setStatus(error.message);
+            }
+        }
+
+        function renderSortedFileList(imagePaths) {
+            const list = document.getElementById("sortedFilesList");
+
+            if (!list) {
+                return;
+            }
+
+            list.innerHTML = "";
+            list.hidden = !SHOW_SORTED_FILE_LIST;
+
+            if (!SHOW_SORTED_FILE_LIST) {
+                return;
+            }
+
+            for (const imagePath of imagePaths) {
+                const item = document.createElement("li");
+                item.textContent = imagePath;
+                list.appendChild(item);
+            }
+        }
+
+        function initMap1() {
+            prepareMapBox("map");
+
+            map = L.map("map").setView([0, 0], 2);
+            map.createPane(MILE_MARKER_PANE);
+            map.getPane(MILE_MARKER_PANE).style.zIndex = 650;
+
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 18,
+            }).addTo(map);
+
+            mileMarkerLayer = L.layerGroup();
+
+            if (shouldShowMileMarkers()) {
+                mileMarkerLayer.addTo(map);
+            }
+
+            map.on("zoomend", updateMileMarkerTooltips);
+            loadMileMarkersForMap();
+        }
+
+        function getKmlElements(parent, name) {
+            return Array.from(new Set(
+                Array.from(parent.getElementsByTagNameNS("*", name))
+                    .concat(Array.from(parent.getElementsByTagName(name)))
+            ));
+        }
+
+        function getFirstKmlText(parent, name) {
+            const element = getKmlElements(parent, name)[0];
+            return element ? element.textContent.trim() : "";
+        }
+
+        async function loadMileMarkerData() {
+            if (mileMarkerData) {
+                return mileMarkerData;
+            }
+
+            if (mileMarkerLoadPromise) {
+                return mileMarkerLoadPromise;
+            }
+
+            mileMarkerLoadPromise = (async () => {
+                if (!window.JSZip) {
+                    throw new Error("JSZip is not available.");
+                }
+
+                const response = await fetch(pathToUrl(MILE_MARKERS_KMZ_PATH), {
+                    cache: "no-store",
+                });
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Could not read ${MILE_MARKERS_KMZ_PATH}. HTTP ${response.status} ${response.statusText}`
+                    );
+                }
+
+                const zip = await JSZip.loadAsync(await response.arrayBuffer());
+                const kmlFile = zip.file(/\.kml$/i)[0];
+
+                if (!kmlFile) {
+                    throw new Error(`${MILE_MARKERS_KMZ_PATH} does not contain a KML file.`);
+                }
+
+                const kmlText = await kmlFile.async("string");
+                const kml = new DOMParser().parseFromString(kmlText, "application/xml");
+                const parseError = kml.getElementsByTagName("parsererror")[0];
+
+                if (parseError) {
+                    throw new Error(`Could not parse KML inside ${MILE_MARKERS_KMZ_PATH}.`);
+                }
+
+                mileMarkerData = getKmlElements(kml, "Placemark").map(placemark => {
+                    const point = getKmlElements(placemark, "Point")[0];
+                    const coordinatesText = point ? getFirstKmlText(point, "coordinates") : "";
+                    const firstCoordinate = coordinatesText.split(/\s+/).find(Boolean);
+
+                    if (!firstCoordinate) {
+                        return null;
+                    }
+
+                    const [lonText, latText] = firstCoordinate.split(",");
+                    const lon = parseFloat(lonText);
+                    const lat = parseFloat(latText);
+
+                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+                        return null;
+                    }
+
+                    return {
+                        name: getFirstKmlText(placemark, "name") || "Mile marker",
+                        lat,
+                        lon,
+                    };
+                }).filter(Boolean);
+
+                return mileMarkerData;
+            })();
+
+            return mileMarkerLoadPromise;
+        }
+
+        function shouldShowMileMarkers() {
+            return document.getElementById("toggleMileMarkers")?.checked !== false;
+        }
+
+        function getMileMarkerPopupHtml(marker) {
+            const lat = marker.lat.toFixed(7);
+            const lon = marker.lon.toFixed(7);
+            const mapsUrl = getGoogleMapsUrl(marker.lat, marker.lon);
+
+            return (
+                `<strong>${escapeHtml(marker.name)}</strong><br>` +
+                `Latitude: ${lat}<br>` +
+                `Longitude: ${lon}<br>` +
+                `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>`
+            );
+        }
+
+        function isMileMarkerNearTrajectory(marker) {
+            if (uniquePoints.length === 0) {
+                return false;
+            }
+
+            return uniquePoints.some(point =>
+                calcDist(marker.lat, marker.lon, point.lat, point.lon) <= MAX_MILE_MARKER_DISTANCE_KM
+            );
+        }
+
+        function drawMileMarkers(markersData) {
+            if (!map || !mileMarkerLayer) {
+                return;
+            }
+
+            mileMarkerLayer.clearLayers();
+
+            markersData.filter(isMileMarkerNearTrajectory).forEach(marker => {
+                L.circleMarker([marker.lat, marker.lon], {
+                    pane: MILE_MARKER_PANE,
+                    radius: 6,
+                    color: "#111820",
+                    weight: 2,
+                    fillColor: "#ffd166",
+                    fillOpacity: 1,
+                    opacity: 1,
+                })
+                    .bindPopup(getMileMarkerPopupHtml(marker))
+                    .bindTooltip(escapeHtml(marker.name), {
+                        direction: "top",
+                        offset: [0, -8],
+                        opacity: 1,
+                        className: "mile-marker-tooltip",
+                    })
+                    .addTo(mileMarkerLayer);
+            });
+
+            updateMileMarkerLayerVisibility();
+            updateMileMarkerTooltips();
+        }
+
+        async function loadMileMarkersForMap() {
+            const targetMap = map;
+
+            try {
+                const markersData = await loadMileMarkerData();
+
+                if (map !== targetMap) {
+                    return;
+                }
+
+                drawMileMarkers(markersData);
+            } catch (error) {
+                mileMarkerLoadPromise = null;
+                console.warn(error);
+            }
+        }
+
+        function updateMileMarkerTooltips() {
+            if (!map || !mileMarkerLayer || !shouldShowMileMarkers()) {
+                return;
+            }
+
+            const showTooltips = map.getZoom() >= MILE_MARKER_TOOLTIP_MIN_ZOOM;
+
+            mileMarkerLayer.eachLayer(layer => {
+                if (showTooltips) {
+                    layer.openTooltip();
+                } else {
+                    layer.closeTooltip();
+                }
+            });
+        }
+
+        function updateMileMarkerLayerVisibility() {
+            if (!map || !mileMarkerLayer) {
+                return;
+            }
+
+            if (shouldShowMileMarkers()) {
+                if (!map.hasLayer(mileMarkerLayer)) {
+                    mileMarkerLayer.addTo(map);
+                }
+                updateMileMarkerTooltips();
+            } else {
+                mileMarkerLayer.eachLayer(layer => layer.closeTooltip());
+                if (map.hasLayer(mileMarkerLayer)) {
+                    map.removeLayer(mileMarkerLayer);
+                }
+            }
+        }
+
+        function generateMarkers() {
+            const latLngs = uniquePoints.map(point => [point.lat, point.lon]);
+
+            if (latLngs.length > 1) {
+                trackPolyline = L.polyline(latLngs, {
+                    color: "rgb(34, 34, 250)",
+                    weight: 4,
+                    opacity: 0.9,
+                    smoothFactor: 1,
+                    lineCap: "round",
+                    lineJoin: "round",
+                }).addTo(map);
+            }
+
+            /*
+                Invisible markers preserve click-to-select behavior at each GPS point
+                without drawing visible blue circles.
+            */
+            markers = uniquePoints.map((point, index) => {
+                const marker = L.marker([point.lat, point.lon], {
+                    icon: trackClickTargetIcon,
+                    pointIndex: index,
+                    keyboard: false,
+                    title: `GPS point ${index + 1}`,
+                })
+                    .on("click", () => {
+                        showImage(index);
+                    })
+                    .addTo(map)
+                    .bindPopup(
+                        `${escapeHtml(point.name)}<br>` +
+                        `Latitude: ${point.lat}<br>` +
+                        `Longitude: ${point.lon}`
+                    );
+
+                return marker;
+            });
+
+            centerTrackMapOnTrajectory();
+
+            setTimeout(() => {
+                map.invalidateSize();
+                centerTrackMapOnTrajectory();
+            }, 0);
+        }
+
+        function getTrajectoryMidpoint() {
+            if (uniquePoints.length === 0) {
+                return null;
+            }
+
+            if (uniquePoints.length === 1) {
+                return [uniquePoints[0].lat, uniquePoints[0].lon];
+            }
+
+            let totalDistance = 0;
+            const segmentDistances = [];
+
+            for (let i = 1; i < uniquePoints.length; i++) {
+                const previous = uniquePoints[i - 1];
+                const current = uniquePoints[i];
+                const distance = calcDist(previous.lat, previous.lon, current.lat, current.lon);
+
+                segmentDistances.push(distance);
+                totalDistance += distance;
+            }
+
+            if (!Number.isFinite(totalDistance) || totalDistance <= 0) {
+                const middle = uniquePoints[Math.floor(uniquePoints.length / 2)];
+                return [middle.lat, middle.lon];
+            }
+
+            const targetDistance = totalDistance / 2;
+            let traveled = 0;
+
+            for (let i = 1; i < uniquePoints.length; i++) {
+                const segmentDistance = segmentDistances[i - 1];
+
+                if (traveled + segmentDistance >= targetDistance) {
+                    const previous = uniquePoints[i - 1];
+                    const current = uniquePoints[i];
+                    const ratio = segmentDistance > 0
+                        ? (targetDistance - traveled) / segmentDistance
+                        : 0;
+
+                    return [
+                        previous.lat + (current.lat - previous.lat) * ratio,
+                        previous.lon + (current.lon - previous.lon) * ratio,
+                    ];
+                }
+
+                traveled += segmentDistance;
+            }
+
+            const lastPoint = uniquePoints[uniquePoints.length - 1];
+            return [lastPoint.lat, lastPoint.lon];
+        }
+
+        function centerTrackMapOnTrajectory() {
+            if (!map || uniquePoints.length === 0) {
+                return;
+            }
+
+            const midpoint = getTrajectoryMidpoint();
+
+            if (uniquePoints.length === 1) {
+                map.setView(midpoint, 18, {
+                    animate: false,
+                });
+                return;
+            }
+
+            const bounds = trackPolyline
+                ? trackPolyline.getBounds()
+                : L.latLngBounds(uniquePoints.map(point => [point.lat, point.lon]));
+
+            if (bounds && bounds.isValid()) {
+                map.fitBounds(bounds, {
+                    animate: false,
+                    padding: TRACK_MAP_ROUTE_PADDING,
+                });
+            }
+
+            if (midpoint) {
+                map.panTo(midpoint, {
+                    animate: false,
+                });
+            }
+        }
+        
+        function getSceneId(index) {
+            return `scene_${index}`;
+        }
+
+        function buildPannellumScenes() {
+            const scenes = {};
+
+            uniquePoints.forEach((point, index) => {
+                scenes[getSceneId(index)] = {
+                    type: "equirectangular",
+                    panorama: point.imageSrc,
+                    yaw: DEFAULT_PANORAMA_YAW,
+                    pitch: DEFAULT_PANORAMA_PITCH,
+                    hfov: DEFAULT_PANORAMA_HFOV,
+                };
+            });
+
+            return scenes;
+        }
+
+        function initPanoramaViewer(initialIndex = 0) {
+            const viewerElement = document.getElementById("viewer");
+
+            viewerElement.className = "";
+            viewerElement.innerHTML = "";
+
+            panoramaViewer = pannellum.viewer("viewer", {
+                autoLoad: true,
+
+                default: {
+                    firstScene: getSceneId(initialIndex),
+                    sceneFadeDuration: 0,
+                    autoLoad: true,
+                },
+
+                scenes: buildPannellumScenes(),
+            });
+        }
+
+        function preloadImage(url) {
+            if (!PRELOAD_PANORAMA_IMAGES) {
+                return Promise.resolve();
+            }
+
+            if (preloadPromises.has(url)) {
+                return preloadPromises.get(url);
+            }
+
+            const promise = new Promise(resolve => {
+                const img = new Image();
+
+                img.decoding = "async";
+
+                img.onload = async () => {
+                    try {
+                        if (img.decode) {
+                            await img.decode();
+                        }
+                    } catch (error) {
+                        /*
+                            decode() can fail in some browser/image combinations.
+                            The image has still loaded, so continue.
+                        */
+                    }
+
+                    resolve();
+                };
+
+                img.onerror = () => {
+                    /*
+                        Do not block navigation forever if an image fails.
+                        Pannellum will still try to load it.
+                    */
+                    resolve();
+                };
+
+                img.src = url;
+            });
+
+            preloadPromises.set(url, promise);
+
+            return promise;
+        }
+
+        function preloadAroundIndex(index) {
+            if (!PRELOAD_PANORAMA_IMAGES || uniquePoints.length === 0) {
+                return;
+            }
+
+            const start = Math.max(0, index - PRELOAD_BACKWARD_COUNT);
+            const end = Math.min(
+                uniquePoints.length - 1,
+                index + PRELOAD_FORWARD_COUNT
+            );
+
+            for (let i = start; i <= end; i++) {
+                preloadImage(uniquePoints[i].imageSrc);
+            }
+        }
+
+        async function showImage(index) {
+            if (uniquePoints.length === 0) {
+                return;
+            }
+
+            const targetIndex = Math.max(0, Math.min(index, uniquePoints.length - 1));
+            const point = uniquePoints[targetIndex];
+
+            /*
+                Update immediately so fast repeated next/previous clicks keep moving.
+            */
+            currentIndex = targetIndex;
+
+            /*
+                Ignore old async calls if the user clicks again quickly.
+            */
+            const requestId = ++showImageRequestId;
+
+            /*
+                Warm nearby images as soon as possible.
+            */
+            preloadAroundIndex(targetIndex);
+
+            if (WAIT_FOR_PRELOAD_BEFORE_SWITCH) {
+                //setStatus(
+                //    `Preparing ${targetIndex + 1}/${uniquePoints.length}: ${point.path}`
+                //);
+
+                await preloadImage(point.imageSrc);
+
+                if (requestId !== showImageRequestId) {
+                    return;
+                }
+            }
+
+            if (!panoramaViewer) {
+                initPanoramaViewer(targetIndex);
+            } else {
+                const sceneId = getSceneId(targetIndex);
+                const currentScene =
+                    typeof panoramaViewer.getScene === "function"
+                        ? panoramaViewer.getScene()
+                        : null;
+
+                if (currentScene !== sceneId) {
+                    let pitch = DEFAULT_PANORAMA_PITCH;
+                    let yaw = DEFAULT_PANORAMA_YAW;
+                    let hfov = DEFAULT_PANORAMA_HFOV;
+
+                    if (PRESERVE_VIEW_WHEN_SWITCHING) {
+                        pitch = panoramaViewer.getPitch();
+                        yaw = panoramaViewer.getYaw();
+                        hfov = panoramaViewer.getHfov();
+                    }
+
+                    panoramaViewer.loadScene(sceneId, pitch, yaw, hfov);
+                }
+            }
+
+            highlightMarker(targetIndex);
+
+            if (map && TRACK_MAP_FOLLOW_CURRENT_POINT) {
+                map.panTo([point.lat, point.lon], {
+                    animate: true,
+                });
+            }
+
+            preloadAroundIndex(targetIndex);
+
+            updateCurrentPos(point,targetIndex);
+            updateGpsLabelVisibility();
+            // setStatus(`Showing ${targetIndex + 1}/${uniquePoints.length}: ${point.name}`); / Leave the status area unchanged during navigation.
+            setStatus(``);
+        }
+
+        function getCurrentGpsTooltipHtml(point) {
+            const rows = [
+                "GPS Location",
+                `Latitude: ${point.lat.toFixed(7)}`,
+                `Longitude: ${point.lon.toFixed(7)}`,
+            ];
+
+            if (point.ele != null && Number.isFinite(point.ele)) {
+                rows.push(`Elevation: ${formatElevation(point.ele)}`);
+            }
+
+            const time = parseTime(point.time);
+
+            if (time) {
+                rows.push(`Time: ${fmtTime(time)}`);
+            }
+
+            return rows.join("<br>");
+        }
+
+        function highlightMarker(index) {
+            const point = uniquePoints[index];
+
+            if (!point || !map) {
+                return;
+            }
+
+            if (!currentLocationMarker) {
+                currentLocationMarker = L.marker([point.lat, point.lon], {
+                    icon: currentDotIcon,
+                    interactive: true,
+                    zIndexOffset: 1000,
+                }).addTo(map);
+            } else {
+                currentLocationMarker.setLatLng([point.lat, point.lon]);
+                currentLocationMarker.setIcon(currentDotIcon);
+            }
+
+            currentLocationMarker.unbindTooltip();
+            currentLocationMarker.unbindPopup();
+
+            currentLocationMarker
+                .bindTooltip(getCurrentGpsTooltipHtml(point), {
+                    permanent: true,
+                    direction: "top",
+                    offset: [0, -14],
+                    opacity: 1,
+                    className: "current-gps-tooltip",
+                })
+                .openTooltip();
+
+            currentLocationMarker.bindPopup(
+                `${escapeHtml(point.name)}<br>` +
+                `Latitude: ${point.lat}<br>` +
+                `Longitude: ${point.lon}`
+            );
+        }
+
+        function showNextImage() {
+            showImage(currentIndex + 1);
+        }
+
+        function showPreviousImage() {
+            showImage(currentIndex - 1);
+        }
+
+        function showNextXImage() {
+            const stepSize =
+                parseInt(document.getElementById("stepSize").value, 10) || 5;
+
+            showImage(currentIndex + stepSize);
+        }
+
+        function showPreviousXImage() {
+            const stepSize =
+                parseInt(document.getElementById("stepSize").value, 10) || 5;
+
+            showImage(currentIndex - stepSize);
+        }
+
+        function initializeAutoplaySpeedInput() {
+            const input = document.getElementById("autoplayFps");
+
+            input.min = String(AUTOPLAY_MIN_IMAGES_PER_SECOND);
+            input.max = String(AUTOPLAY_MAX_IMAGES_PER_SECOND);
+            input.step = String(AUTOPLAY_SPEED_STEP);
+            input.value = String(AUTOPLAY_DEFAULT_IMAGES_PER_SECOND);
+        }
+
+        function formatFpsValue(value) {
+            const rounded = Math.round(value * 100) / 100;
+
+            if (Number.isInteger(rounded)) {
+                return String(rounded);
+            }
+
+            return String(rounded);
+        }
+
+        function getAutoplayFps() {
+            const input = document.getElementById("autoplayFps");
+            let fps = parseFloat(input.value);
+
+            if (!Number.isFinite(fps) || fps <= 0) {
+                fps = AUTOPLAY_DEFAULT_IMAGES_PER_SECOND;
+            }
+
+            fps = Math.max(AUTOPLAY_MIN_IMAGES_PER_SECOND, fps);
+            fps = Math.min(AUTOPLAY_MAX_IMAGES_PER_SECOND, fps);
+
+            input.value = formatFpsValue(fps);
+
+            return fps;
+        }
+
+        function getAutoplayDelayMs() {
+            return 1000 / getAutoplayFps();
+        }
+
+        function updatePlayPauseButton() {
+            const button = document.getElementById("playPauseButton");
+
+            if (!button) {
+                return;
+            }
+
+            button.textContent = autoplayRunning ? "Pause" : "Play";
+            button.setAttribute("aria-pressed", autoplayRunning ? "true" : "false");
+            button.title = autoplayRunning ? "Pause auto-play" : "Start auto-play";
+        }
+
+        function toggleAutoplay() {
+            if (autoplayRunning) {
+                stopAutoplay("");
+            } else {
+                startAutoplay();
+            }
+        }
+
+        function isTextEntryTarget(element) {
+            if (!element) {
+                return false;
+            }
+
+            const tagName = element.tagName ? element.tagName.toLowerCase() : "";
+
+            return (
+                tagName === "input" ||
+                tagName === "select" ||
+                tagName === "textarea" ||
+                element.isContentEditable
+            );
+        }
+
+        function handlePlaybackShortcut(event) {
+            if (
+                event.defaultPrevented ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                isTextEntryTarget(event.target)
+            ) {
+                return;
+            }
+
+            const key = event.key.toLowerCase();
+
+            if (event.code === "Space" || key === "p") {
+                event.preventDefault();
+                toggleAutoplay();
+            }
+        }
+
+        function startAutoplay() {
+            if (uniquePoints.length === 0) {
+                setStatus("No dataset loaded.");
+                return;
+            }
+
+            if (currentIndex >= uniquePoints.length - 1) {
+                /*
+                    If user presses Play while already at the last image,
+                    restart auto-play from the beginning.
+                */
+                currentIndex = -1;
+            }
+
+            autoplayRunning = true;
+            autoplayGeneration += 1;
+
+            const generation = autoplayGeneration;
+            const fps = getAutoplayFps();
+
+            updatePlayPauseButton();
+            //setStatus(`Auto-play started at ${fps} images/sec.`);
+            setStatus(``);
+
+            runAutoplayLoop(generation);
+        }
+
+        function stopAutoplay(message = "") {
+            if (autoplayTimer !== null) {
+                clearTimeout(autoplayTimer);
+                autoplayTimer = null;
+            }
+
+            if (autoplayRunning) {
+                autoplayGeneration += 1;
+            }
+
+            autoplayRunning = false;
+            updatePlayPauseButton();
+
+            if (message) {
+                setStatus(message);
+            }
+        }
+
+        async function runAutoplayLoop(generation) {
+            if (!autoplayRunning || generation !== autoplayGeneration) {
+                return;
+            }
+
+            if (uniquePoints.length === 0) {
+                stopAutoplay("Auto-play stopped because no dataset is loaded.");
+                return;
+            }
+
+            if (currentIndex >= uniquePoints.length - 1) {
+                const point = uniquePoints[uniquePoints.length - 1];
+
+                //stopAutoplay(
+                //    `Auto-play finished at ${uniquePoints.length}/${uniquePoints.length}: ${point.path}`
+                //);
+                stopAutoplay();
+                return;
+            }
+
+            const delayMs = getAutoplayDelayMs();
+            const startedAt = performance.now();
+
+            await showImage(currentIndex + 1);
+
+            if (!autoplayRunning || generation !== autoplayGeneration) {
+                return;
+            }
+
+            if (currentIndex >= uniquePoints.length - 1) {
+                const point = uniquePoints[currentIndex];
+
+                //stopAutoplay(
+                //    `Auto-play finished at ${currentIndex + 1}/${uniquePoints.length}: ${point.path}`
+                //);
+
+                return;
+            }
+
+            const elapsedMs = performance.now() - startedAt;
+            const nextDelayMs = Math.max(0, delayMs - elapsedMs);
+
+            autoplayTimer = setTimeout(() => {
+                runAutoplayLoop(generation);
+            }, nextDelayMs);
+        }
+
+        function handleAutoplaySpeedChange() {
+            const fps = getAutoplayFps();
+
+            if (autoplayRunning) {
+                setStatus(``);
+            }
+        }
+
+        // ========== v7.1: Display Helpers ==========
+        
+        function calcDist(lat1,lon1,lat2,lon2){
+            const R=6371;
+            const dLat=(lat2-lat1)*Math.PI/180;
+            const dLon=(lon2-lon1)*Math.PI/180;
+            const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+            return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+        }
+        
+        function m2feet(m){return m*3.28084}
+        
+        function parseTime(t){
+            if(!t)return null;
+            const value=String(t).trim();
+            const exifMatch=value.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+            const normalized=exifMatch
+                ? `${exifMatch[1]}-${exifMatch[2]}-${exifMatch[3]}T${exifMatch[4]}:${exifMatch[5]}:${exifMatch[6]||'00'}`
+                : value.replace(/^(\d{4}-\d{2}-\d{2})\s+/, '$1T');
+            const date=new Date(normalized);
+            return Number.isNaN(date.getTime())?null:date;
+        }
+        
+        function fmtTime(d){
+            if(!d)return'--';
+            return d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+        }
+        
+        function formatElevation(m){
+            if(m==null||!Number.isFinite(m))return'--';
+            if(UNIT_SYSTEM==='imperial'){
+                const feet=m2feet(m);
+                return Math.round(feet)+' ft';
+            }
+            return Math.round(m)+' m';
+        }
+
+        function getGoogleMapsUrl(lat, lon) {
+            return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lon}`)}`;
+        }
+        
+        function updateCurrentPos(p,i){
+            document.getElementById('currentPosCard').hidden=false;
+            const coords=document.getElementById('posCoords');
+            const details=[
+                `Lat: ${p.lat.toFixed(7)}`,
+                `Lon: ${p.lon.toFixed(7)}`
+            ];
+            const time=parseTime(p.time);
+
+            if(p.ele!=null&&Number.isFinite(p.ele)){
+                details.push(`Ele: ${formatElevation(p.ele)}`);
+            }
+
+            if(time){
+                details.push(`Time: ${fmtTime(time)}`);
+            }
+
+            coords.textContent=details.join(' | ') + ' | ';
+
+            const link=document.createElement('a');
+            link.href=getGoogleMapsUrl(p.lat,p.lon);
+            link.target='_blank';
+            link.rel='noopener noreferrer';
+            link.textContent='Show current location in Google Maps';
+            coords.appendChild(link);
+        }
+        function updateGpsLabelVisibility(){
+            const show=document.getElementById("toggleGpsLabel")?.checked;
+            if(currentLocationMarker){
+                if(show){currentLocationMarker.openTooltip();}
+                else{currentLocationMarker.closeTooltip();}
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function setContactEmail(elementId) {
+            const emailLink = document.getElementById(elementId);
+            if (!emailLink) return;
+
+            const localPart = ["kevin", "mcgrath"].join(".");
+            const domainPart = ["dot", "state", "ma", "us"].join(".");
+            const address = `${localPart}@${domainPart}`;
+
+            emailLink.textContent = address;
+            emailLink.href = `mailto:${address}`;
+        }
+
+        document
+            .getElementById("dropdown")
+            .addEventListener("change", event => changeDataset(event.target.value));
+
+        document
+            .getElementById("nextButton")
+            .addEventListener("click", showNextImage);
+
+        document
+            .getElementById("prevButton")
+            .addEventListener("click", showPreviousImage);
+
+        document
+            .getElementById("nextXButton")
+            .addEventListener("click", showNextXImage);
+
+        document
+            .getElementById("prevXButton")
+            .addEventListener("click", showPreviousXImage);
+
+        document
+            .getElementById("playPauseButton")
+            .addEventListener("click", toggleAutoplay);
+
+        document.addEventListener("keydown", handlePlaybackShortcut);
+
+        document
+            .getElementById("autoplayFps")
+            .addEventListener("change", handleAutoplaySpeedChange);
+
+        initializeAutoplaySpeedInput();
+        updatePlayPauseButton();
+        setContactEmail("landingContactEmail");
+        document.addEventListener("change",e=>{
+            if(e.target&&e.target.id==="toggleGpsLabel")updateGpsLabelVisibility();
+            if(e.target&&e.target.id==="toggleMileMarkers")updateMileMarkerLayerVisibility();
+        });
+        loadDatasetDropdown();
+    </script>
+</body>
+</html>
